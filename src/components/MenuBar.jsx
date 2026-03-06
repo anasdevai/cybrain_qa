@@ -11,6 +11,7 @@ export const MenuBar = ({
     onOpenLinkModal,
     profile,
     onProfileChange,
+    onCompare,
     onOpenPreview,
 }) => {
     const editorState = useEditorState({
@@ -154,8 +155,21 @@ export const MenuBar = ({
                     Insert URL
                 </button>
 
+                {/* DIFF VIEWER */}
+                <button
+                    onClick={() => {
 
+                        if (versions.length < 2) return
 
+                        const last = versions[versions.length - 1]
+                        const prev = versions[versions.length - 2]
+
+                        onCompare(prev.id, last.id)
+
+                    }}
+                >
+                    Compare Last Versions
+                </button>
 
 
 

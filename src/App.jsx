@@ -13,6 +13,9 @@ import StatusBar from './components/StatusBar'
 import LinkModal from './components/LinkModal'
 import PreviewModal from './components/PreviewModal'
 
+
+import SideBySideViewer from './diff/SideBySideViewer'
+
 import { debounce } from 'lodash'
 // html2pdf imported in PreviewModal
 
@@ -50,6 +53,12 @@ const App = () => {
   const [profile, setProfile] = useState('Contract')
   const [isPreviewModalOpen, setIsPreviewModalOpen] = useState(false)
 
+  /* NEW STATE */
+  const [diffOldVersion, setDiffOldVersion] = useState(null)
+  const [diffNewVersion, setDiffNewVersion] = useState(null)
+  const [isDiffMode, setIsDiffMode] = useState(false)
+
+
   /* ---------------- EDITOR CONFIG ---------------- */
 
   const extensions = useMemo(() => [
@@ -71,6 +80,14 @@ const App = () => {
       attributes: { class: 'tiptap' }
     }
   })
+
+  // Expose editor to window for global browser console debugging
+  useEffect(() => {
+    if (editor) {
+      window.editor = editor
+    }
+  }, [editor])
+
 
   /* ---------------- SAVE SYSTEM ---------------- */
 
@@ -162,19 +179,31 @@ const App = () => {
     if (!editor) return
     const handleKeyDown = (e) => {
       const mod = e.ctrlKey || e.metaKey
-      if (mod && e.key === 's') {
+      if (!mod) return;
+
+      const key = e.key.toLowerCase();
+
+      if (!e.shiftKey && key === 's') {
         e.preventDefault()
         manualSave()
       }
-      if (mod && e.shiftKey && e.key === 'V') {
+      if (e.shiftKey && key === 'v') {
         e.preventDefault()
         createNewVersion()
       }
-      if (mod && e.key === 'p') {
+      if (!e.shiftKey && key === 'p') {
         e.preventDefault()
         setIsPreviewModalOpen(true)
       }
-      if (mod && e.key === 'k') {
+      if (!e.shiftKey && key === 'z') {
+        e.preventDefault()
+        editor.chain().focus().undo().run()
+      }
+      if (e.shiftKey && key === 'z') {
+        e.preventDefault()
+        editor.chain().focus().redo().run()
+      }
+      if (!e.shiftKey && key === 'k') {
         e.preventDefault()
         setLinkModalInitialUrl(editor.getAttributes('link').href || '')
         setIsLinkModalOpen(true)
@@ -248,6 +277,23 @@ const App = () => {
     setIsLinkModalOpen(false)
   }
 
+
+  /* ---------------- DIFF VIEWER ---------------- */
+
+  const compareTwoVersions = (v1, v2) => {
+    if (!versions || versions.length < 2) return
+
+    const version1 = versions.find(v => v.id === v1)
+    const version2 = versions.find(v => v.id === v2)
+
+    if (!version1 || !version2) return
+
+    setDiffOldVersion(version1)
+    setDiffNewVersion(version2)
+    setIsDiffMode(true)
+  }
+
+
   return (
     <div className="editor-wrapper">
       <MenuBar
@@ -256,6 +302,7 @@ const App = () => {
         onNewVersion={createNewVersion}
         currentVersion={currentVersionId}
         onLoadVersion={loadVersion}
+        onCompare={compareTwoVersions}
         versions={versions}
         onOpenLinkModal={() => {
           setLinkModalInitialUrl(editor.getAttributes('link').href || '')
@@ -289,6 +336,14 @@ const App = () => {
         editor={editor}
         versionId={currentVersionId}
       />
+
+      {isDiffMode && (
+        <SideBySideViewer
+          oldVersion={diffOldVersion}
+          newVersion={diffNewVersion}
+          onClose={() => setIsDiffMode(false)}
+        />
+      )}
     </div>
   )
 }
