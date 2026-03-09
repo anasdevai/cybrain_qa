@@ -602,3 +602,155 @@ body {
     background: transparent !important;
   }
 }
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: linear-gradient(135deg, #f5f7fa, #c3cfe2);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  min-height: 100dvh;
+  -webkit-text-size-adjust: 100%;
+}
+
+/* MAIN WRAPPER */
+
+.editor-wrapper {
+  max-width: 1200px;
+  margin: auto;
+  padding: 20px;
+  padding-bottom: calc(140px + env(safe-area-inset-bottom));
+  min-height: 100dvh;
+  background: white;
+  border: 2px solid #e2e8f0;
+  border-radius: 20px;
+}
+
+/* TOOLBAR */
+
+.button-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 16px;
+  background: white;
+  border: 2px solid #e2e8f0;
+  border-radius: 16px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, .12);
+}
+
+.button-group button {
+  padding: 8px 12px;
+  border: 1px solid #d1d5db;
+  background: white;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.button-group button:hover {
+  background: #f8fafc;
+}
+
+.version-select {
+  padding: 8px 12px;
+  border: 2px solid #d1d5db;
+  border-radius: 8px;
+}
+
+/* EDITOR */
+
+.tiptap {
+  background: white;
+  border: 2px solid #e2e8f0;
+  padding: 28px;
+  border-radius: 20px;
+  min-height: 600px;
+  font-size: 16px;
+  line-height: 1.7;
+  outline: none;
+}
+
+/* TABLE FIX */
+
+.tiptap table {
+  border-collapse: collapse;
+  width: 100%;
+  display: block;
+  overflow-x: auto;
+}
+
+.tiptap td,
+.tiptap th {
+  border: 1px solid #444;
+  padding: 8px 12px;
+}
+
+/* STATUS BAR */
+
+.status-bar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: #f8fafc;
+  border-top: 2px solid #e2e8f0;
+  padding: 10px 24px;
+  padding-bottom: calc(10px + env(safe-area-inset-bottom));
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  box-shadow: 0 -8px 32px rgba(0, 0, 0, .12);
+  z-index: 1000;
+}
+
+.status-right {
+  display: flex;
+  gap: 10px;
+}
+
+/* MOBILE */
+
+@media (max-width:768px) {
+
+  .editor-wrapper {
+    padding: 12px;
+    border: none;
+    max-width: 100%;
+  }
+
+  .button-group {
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .button-group button {
+    flex: 0 0 auto;
+  }
+
+  .status-bar {
+    flex-direction: column;
+    gap: 6px;
+    padding: 8px 12px;
+  }
+
+}
+
+/* SMALL PHONE */
+
+@media (max-width:480px) {
+
+  .status-bar {
+    font-size: 12px;
+  }
+
+  .editor-wrapper {
+    padding-bottom: calc(160px + env(safe-area-inset-bottom));
+  }
+
+}
