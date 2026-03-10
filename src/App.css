@@ -73,12 +73,17 @@ body {
   border-color: #cbd5e1;
 }
 
-.button-group .is-active,
 .button-group button.is-active {
-  background: #3b82f6 !important;
-  color: white !important;
-  border-color: #2563eb !important;
+  background: #2563eb;
+  color: white;
+  border-color: #2563eb;
 }
+
+.button-group button.is-active:hover {
+  background: #1d4ed8;
+  border-color: #1d4ed8;
+}
+
 
 .button-group button:disabled {
   opacity: 0.5;

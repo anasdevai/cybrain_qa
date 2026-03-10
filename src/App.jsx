@@ -2,7 +2,7 @@ import { useEditor, EditorContent } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import UniqueID from '@tiptap/extension-unique-id'
 import Link from '@tiptap/extension-link'
-
+import Underline from '@tiptap/extension-underline'
 import { Table } from '@tiptap/extension-table'
 import { TableRow } from '@tiptap/extension-table-row'
 import { TableCell } from '@tiptap/extension-table-cell'
@@ -12,13 +12,9 @@ import { MenuBar } from './components/MenuBar'
 import StatusBar from './components/StatusBar'
 import LinkModal from './components/LinkModal'
 import PreviewModal from './components/PreviewModal'
-
-
 import SideBySideViewer from './diff/SideBySideViewer'
 
 import { debounce } from 'lodash'
-// html2pdf imported in PreviewModal
-
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 
 import './App.css'
@@ -53,17 +49,80 @@ const App = () => {
   const [profile, setProfile] = useState('Contract')
   const [isPreviewModalOpen, setIsPreviewModalOpen] = useState(false)
 
-  /* NEW STATE */
   const [diffOldVersion, setDiffOldVersion] = useState(null)
   const [diffNewVersion, setDiffNewVersion] = useState(null)
   const [isDiffMode, setIsDiffMode] = useState(false)
 
+  const debouncedSave = useMemo(
+    () =>
+      debounce((json, vId, setVersionsRef, setLastSavedRef, setIsSavingRef) => {
+        setIsSavingRef(true)
+        setVersionsRef(prev => {
+          const updated = prev.map(v =>
+            v.id === vId
+              ? { ...v, json, timestamp: formatTimestamp(new Date()), isFormatted: true }
+              : v
+          )
+          saveToStorage(updated)
+          setLastSavedRef(new Date())
+          setTimeout(() => setIsSavingRef(false), 800)
+          return updated
+        })
+      }, 2000),
+    []
+  )
 
-  /* ---------------- EDITOR CONFIG ---------------- */
+  const manualSave = useCallback(() => {
+    if (!window.editorInstance) return
+
+    debouncedSave.cancel()
+    setIsSaving(true)
+
+    const json = window.editorInstance.getJSON()
+
+    setVersions(prev => {
+      const updated = prev.map(v =>
+        v.id === currentVersionId
+          ? { ...v, json, timestamp: formatTimestamp(new Date()), isFormatted: true }
+          : v
+      )
+      saveToStorage(updated)
+      setLastSaved(new Date())
+      setTimeout(() => setIsSaving(false), 800)
+      return updated
+    })
+  }, [currentVersionId, debouncedSave])
+
+  const createNewVersion = useCallback(() => {
+    if (!window.editorInstance) return
+
+    setVersions(prev => {
+      const versionNumber = prev.length + 1
+      const newId = `v${versionNumber}`
+      const json = window.editorInstance.getJSON()
+
+      const newVersion = {
+        id: newId,
+        json,
+        timestamp: formatTimestamp(new Date()),
+        isFormatted: true
+      }
+
+      const updated = [...prev, newVersion]
+      saveToStorage(updated)
+      setCurrentVersionId(newId)
+      return updated
+    })
+  }, [])
 
   const extensions = useMemo(() => [
     StarterKit,
-    Link.configure({ openOnClick: true }),
+    Underline,
+    Link.configure({
+      openOnClick: true,
+      autolink: true,
+      linkOnPaste: true
+    }),
     UniqueID.configure({
       types: ['heading', 'paragraph', 'bulletList', 'orderedList', 'table'],
       attributeName: 'block-id'
@@ -77,93 +136,112 @@ const App = () => {
   const editor = useEditor({
     extensions,
     editorProps: {
-      attributes: { class: 'tiptap' }
+      attributes: { class: 'tiptap' },
+      handleKeyDown: (_view, event) => {
+        const e = event
+        const mod = e.ctrlKey || e.metaKey
+        const key = e.key.toLowerCase()
+
+        if (mod && !e.shiftKey && !e.altKey && key === 's') {
+          e.preventDefault()
+          manualSave()
+          return true
+        }
+
+        if (mod && e.shiftKey && !e.altKey && key === 'v') {
+          e.preventDefault()
+          createNewVersion()
+          return true
+        }
+
+        if (mod && e.altKey && key === 'p') {
+          e.preventDefault()
+          setIsPreviewModalOpen(true)
+          return true
+        }
+
+        if (mod && !e.shiftKey && !e.altKey && key === 'u') {
+          e.preventDefault()
+          editor?.chain().focus().toggleUnderline().run()
+          return true
+        }
+
+        if (mod && !e.shiftKey && !e.altKey && key === 'k') {
+          e.preventDefault()
+          setLinkModalInitialUrl(editor?.getAttributes('link').href || '')
+          setIsLinkModalOpen(true)
+          return true
+        }
+
+        if (!mod && e.altKey && key === '1') {
+          e.preventDefault()
+          editor?.chain().focus().toggleHeading({ level: 1 }).run()
+          return true
+        }
+
+        if (!mod && e.altKey && key === '2') {
+          e.preventDefault()
+          editor?.chain().focus().toggleHeading({ level: 2 }).run()
+          return true
+        }
+
+        if (!mod && e.altKey && key === '3') {
+          e.preventDefault()
+          editor?.chain().focus().toggleHeading({ level: 3 }).run()
+          return true
+        }
+
+        if (mod && e.shiftKey && !e.altKey && key === '7') {
+          e.preventDefault()
+          editor?.chain().focus().toggleOrderedList().run()
+          return true
+        }
+
+        if (mod && e.shiftKey && !e.altKey && key === 'l') {
+          e.preventDefault()
+          editor?.chain().focus().toggleBulletList().run()
+          return true
+        }
+
+        if (!mod && e.altKey && key === 't') {
+          e.preventDefault()
+          editor?.chain().focus().insertTable({ rows: 4, cols: 4, withHeaderRow: true }).run()
+          return true
+        }
+
+
+        if (mod && e.shiftKey && key === 'x') {
+          e.preventDefault()
+          editor?.chain().focus().toggleStrike().run()
+          return true
+        }
+
+        return false
+      }
     }
   })
 
-  // Expose editor to window for global browser console debugging
   useEffect(() => {
     if (editor) {
       window.editor = editor
+      window.editorInstance = editor
     }
   }, [editor])
-
-
-  /* ---------------- SAVE SYSTEM ---------------- */
-
-  const debouncedSave = useCallback(
-    debounce((json, vId) => {
-      setIsSaving(true)
-      setVersions(prev => {
-        const updated = prev.map(v =>
-          v.id === vId
-            ? { ...v, json, timestamp: formatTimestamp(new Date()), isFormatted: true }
-            : v
-        )
-        saveToStorage(updated)
-        setLastSaved(new Date())
-        setTimeout(() => setIsSaving(false), 800)
-        return updated
-      })
-    }, 2000),
-    []
-  )
 
   useEffect(() => {
     if (!editor) return
 
     const handleUpdate = () => {
-      // Pass the CURRENT version ID into the debounced save
-      debouncedSave(editor.getJSON(), currentVersionId)
+      debouncedSave(editor.getJSON(), currentVersionId, setVersions, setLastSaved, setIsSaving)
     }
 
     editor.on('update', handleUpdate)
+
     return () => {
       editor.off('update', handleUpdate)
       debouncedSave.cancel()
     }
   }, [editor, currentVersionId, debouncedSave])
-
-  const manualSave = useCallback(() => {
-    if (!editor) return
-    debouncedSave.cancel()
-
-    setIsSaving(true)
-    const json = editor.getJSON()
-
-    setVersions(prev => {
-      const updated = prev.map(v =>
-        v.id === currentVersionId
-          ? { ...v, json, timestamp: formatTimestamp(new Date()), isFormatted: true }
-          : v
-      )
-      saveToStorage(updated)
-      setLastSaved(new Date())
-      setTimeout(() => setIsSaving(false), 800)
-      return updated
-    })
-  }, [editor, currentVersionId, debouncedSave])
-
-  /* ---------------- VERSION CONTROL ---------------- */
-
-  const createNewVersion = useCallback(() => {
-    if (!editor) return
-    const versionNumber = versions.length + 1
-    const newId = `v${versionNumber}`
-    const json = editor.getJSON()
-
-    const newVersion = {
-      id: newId,
-      json: json,
-      timestamp: formatTimestamp(new Date()),
-      isFormatted: true
-    }
-
-    const updated = [...versions, newVersion]
-    setVersions(updated)
-    setCurrentVersionId(newId)
-    saveToStorage(updated)
-  }, [editor, versions.length])
 
   const loadVersion = useCallback((versionId) => {
     const version = versions.find(v => v.id === versionId)
@@ -173,54 +251,13 @@ const App = () => {
     }
   }, [editor, versions])
 
-  /* ---------------- KEYBOARD SHORTCUTS ---------------- */
-
-  useEffect(() => {
-    if (!editor) return
-    const handleKeyDown = (e) => {
-      const mod = e.ctrlKey || e.metaKey
-      if (!mod) return;
-
-      const key = e.key.toLowerCase();
-
-      if (!e.shiftKey && key === 's') {
-        e.preventDefault()
-        manualSave()
-      }
-      if (e.shiftKey && key === 'v') {
-        e.preventDefault()
-        createNewVersion()
-      }
-      if (!e.shiftKey && key === 'p') {
-        e.preventDefault()
-        setIsPreviewModalOpen(true)
-      }
-      if (!e.shiftKey && key === 'z') {
-        e.preventDefault()
-        editor.chain().focus().undo().run()
-      }
-      if (e.shiftKey && key === 'z') {
-        e.preventDefault()
-        editor.chain().focus().redo().run()
-      }
-      if (!e.shiftKey && key === 'k') {
-        e.preventDefault()
-        setLinkModalInitialUrl(editor.getAttributes('link').href || '')
-        setIsLinkModalOpen(true)
-      }
-    }
-    window.addEventListener('keydown', handleKeyDown)
-    return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [editor, manualSave, createNewVersion])
-
-  /* ---------------- STATS ---------------- */
-
   const text = editor?.getText() || ''
   const wordCount = text.split(/\s+/).filter(Boolean).length || 0
   const charCount = text.length || 0
 
   useEffect(() => {
     if (!editor) return
+
     const updateBlockCount = () => {
       let count = 0
       editor.state.doc.descendants(node => {
@@ -228,17 +265,18 @@ const App = () => {
       })
       setBlockCount(count)
     }
+
     updateBlockCount()
     editor.on('update', updateBlockCount)
+
     return () => editor.off('update', updateBlockCount)
   }, [editor])
-
-  /* ---------------- LOAD SAVED VERSIONS ---------------- */
 
   useEffect(() => {
     if (!editor || isInitialized.current) return
 
     const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]')
+
     if (saved.length > 0) {
       setVersions(saved)
       const lastVersion = saved[saved.length - 1]
@@ -246,23 +284,26 @@ const App = () => {
       editor.commands.setContent(lastVersion.json, false)
     } else {
       const initialContent = {
-        type: "doc",
+        type: 'doc',
         content: [
-          { type: "heading", attrs: { level: 1 }, content: [{ type: "text", text: "AI Law Document Example" }] },
-          { type: "paragraph", content: [{ type: "text", text: "Testing versioning, block IDs and table structure." }] }
+          { type: 'heading', attrs: { level: 1 }, content: [{ type: 'text', text: 'AI Law Document Example' }] },
+          { type: 'paragraph', content: [{ type: 'text', text: 'Testing versioning, block IDs and table structure.' }] }
         ]
       }
+
       const initialVersion = {
         id: 'v1',
         json: initialContent,
         timestamp: formatTimestamp(new Date()),
         isFormatted: true
       }
+
       setVersions([initialVersion])
       setCurrentVersionId('v1')
       editor.commands.setContent(initialContent, false)
       saveToStorage([initialVersion])
     }
+
     isInitialized.current = true
   }, [editor])
 
@@ -277,23 +318,18 @@ const App = () => {
     setIsLinkModalOpen(false)
   }
 
-
-  /* ---------------- DIFF VIEWER ---------------- */
-
   const compareTwoVersions = (v1, v2) => {
     if (!versions || versions.length < 1) return
 
     const version1 = versions.find(v => v.id === v1)
     const version2 = versions.find(v => v.id === v2)
 
-    // Fallback: If only one version is selected, or same version, we might just show it or error
     if (!version1 || !version2) return
 
     setDiffOldVersion(version1)
     setDiffNewVersion(version2)
     setIsDiffMode(true)
   }
-
 
   return (
     <div className="editor-wrapper">
@@ -311,9 +347,11 @@ const App = () => {
         }}
         onOpenPreview={() => setIsPreviewModalOpen(true)}
       />
+
       <div ref={editorRef} className="pdf-export-wrapper">
         <EditorContent editor={editor} />
       </div>
+
       <StatusBar
         wordCount={wordCount}
         charCount={charCount}
@@ -323,6 +361,7 @@ const App = () => {
         profile={profile}
         onProfileChange={setProfile}
       />
+
       <LinkModal
         isOpen={isLinkModalOpen}
         onClose={() => setIsLinkModalOpen(false)}
@@ -337,16 +376,14 @@ const App = () => {
         versionId={currentVersionId}
       />
 
-      {
-        isDiffMode && (
-          <SideBySideViewer
-            oldVersion={diffOldVersion}
-            newVersion={diffNewVersion}
-            onClose={() => setIsDiffMode(false)}
-          />
-        )
-      }
-    </div >
+      {isDiffMode && (
+        <SideBySideViewer
+          oldVersion={diffOldVersion}
+          newVersion={diffNewVersion}
+          onClose={() => setIsDiffMode(false)}
+        />
+      )}
+    </div>
   )
 }
 

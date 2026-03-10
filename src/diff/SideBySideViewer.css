@@ -198,10 +198,6 @@
     color: #991b1b;
 }
 
-.diff-modified {
-    background: #fffbeb !important;
-    border-left: 3px solid #eab308 !important;
-}
 
 .diff-word-added {
     background: #dcfce7;
