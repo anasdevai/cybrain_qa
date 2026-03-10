@@ -423,11 +423,12 @@ body {
 
 .preview-content-wrapper {
   flex: 1;
-  overflow-y: auto;
+  overflow: auto;
   background: #edf2f7;
   padding: 40px;
   display: flex;
   justify-content: center;
+  align-items: flex-start;
 }
 
 .preview-page-container {
@@ -436,6 +437,8 @@ body {
   min-height: 297mm;
   padding: 20mm;
   box-sizing: border-box;
+  margin: 0 auto;
+  flex-shrink: 0;
 }
 
 .preview-page-container.portrait {
