@@ -126,7 +126,7 @@ const SideBySideViewer = ({ oldVersion, newVersion, onClose }) => {
                     {/* Left Panel: Old Version */}
                     <div className="sbs-panel sbs-old-panel">
                         <div className="sbs-panel-title">Original ({oldVersion.id})</div>
-                        <div className="sbs-content tiptap read-only">
+                        <div className="sbs-content read-only">
                             {oldVersion.json ? <DiffNodeRenderer node={oldVersion.json} /> : <p>No content in original version.</p>}
                         </div>
                     </div>
@@ -134,7 +134,7 @@ const SideBySideViewer = ({ oldVersion, newVersion, onClose }) => {
                     {/* Right Panel: Changes */}
                     <div className="sbs-panel sbs-diff-panel">
                         <div className="sbs-panel-title">Changes ({newVersion.id})</div>
-                        <div className="sbs-content tiptap read-only">
+                        <div className="sbs-content read-only">
                             {diffAst && diffAst.content?.length > 0 ? (
                                 <DiffNodeRenderer node={diffAst} />
                             ) : (
