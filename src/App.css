@@ -8,8 +8,6 @@ body {
   overflow-x: hidden;
 }
 
-
-
 * {
   box-sizing: border-box;
 }
@@ -32,6 +30,7 @@ body {
   background: white;
   border: 2px solid #e2e8f0;
   border-radius: 20px;
+  width: 100%;
 }
 
 /* TOOLBAR */
@@ -83,7 +82,6 @@ body {
   background: #1d4ed8;
   border-color: #1d4ed8;
 }
-
 
 .button-group button:disabled {
   opacity: 0.5;
@@ -156,6 +154,8 @@ body {
   outline: none;
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.15);
   transition: all 0.3s ease;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .tiptap:focus-within {
@@ -207,6 +207,177 @@ body {
   top: 0;
   width: 4px;
   pointer-events: none;
+}
+
+/* CONTRACT LAYOUT */
+.editor-layout {
+  width: 100%;
+  min-width: 0;
+}
+
+.editor-layout.with-right-panel {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  gap: 16px;
+  align-items: start;
+  width: 100%;
+}
+
+.center-editor {
+  min-width: 0;
+  width: 100%;
+}
+
+.right-panel {
+  width: 320px;
+  min-width: 320px;
+  max-width: 320px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.pdf-export-wrapper {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.contract-panel {
+  background: #ffffff;
+  border: 1px solid #dbe2ea;
+  border-radius: 16px;
+  padding: 16px;
+  box-sizing: border-box;
+}
+
+.contract-panel h3 {
+  margin: 0 0 12px 0;
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.contract-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.variables-list,
+.workflow-list,
+.review-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.variable-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.variable-label-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.variable-field input {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #cfd8e3;
+  border-radius: 10px;
+  font-size: 14px;
+  box-sizing: border-box;
+}
+
+.status-text {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.status-text.resolved {
+  color: #15803d;
+}
+
+.status-text.missing {
+  color: #dc2626;
+}
+
+.workflow-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  background: #f8fafc;
+  box-sizing: border-box;
+}
+
+.workflow-item.active {
+  border-color: #93c5fd;
+  background: #eff6ff;
+}
+
+.workflow-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  background: #64748b;
+  flex-shrink: 0;
+}
+
+.current-badge {
+  margin-left: auto;
+  font-size: 11px;
+  color: #2563eb;
+  font-weight: 600;
+}
+
+.primary-btn,
+.secondary-btn,
+.success-btn,
+.warning-btn,
+.danger-btn {
+  padding: 10px 12px;
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.primary-btn {
+  background: #4f46e5;
+  color: white;
+}
+
+.secondary-btn {
+  background: #e5e7eb;
+  color: #111827;
+}
+
+.success-btn {
+  background: #16a34a;
+  color: white;
+}
+
+.warning-btn {
+  background: #f59e0b;
+  color: white;
+}
+
+.danger-btn {
+  background: #dc2626;
+  color: white;
+}
+
+.muted-text {
+  color: #64748b;
+  font-size: 14px;
 }
 
 /* STATUS BAR */
@@ -547,6 +718,19 @@ body {
   .version-select {
     font-size: 13px;
     padding: 7px 10px;
+  }
+}
+
+/* CONTRACT TABLET + MOBILE */
+@media (max-width: 1100px) {
+  .editor-layout.with-right-panel {
+    grid-template-columns: 1fr;
+  }
+
+  .right-panel {
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
   }
 }
 

@@ -1,6 +1,14 @@
 import React from 'react';
 
-const StatusBar = ({ wordCount, charCount = 0, blockCount = 0, lastSaved, isSaving, profile = "Contract", onProfileChange }) => {
+const StatusBar = ({
+    wordCount,
+    charCount = 0,
+    blockCount = 0,
+    lastSaved,
+    isSaving,
+    profile = "contract",
+    onProfileChange,
+}) => {
     return (
         <div className="status-bar">
             <div className="status-left">
@@ -15,8 +23,8 @@ const StatusBar = ({ wordCount, charCount = 0, blockCount = 0, lastSaved, isSavi
                     onChange={(e) => onProfileChange(e.target.value)}
                     className="version-select profile-select-status"
                 >
-                    <option value="Contract">Profile: Contract</option>
-                    <option value="SOP">Profile: SOP</option>
+                    <option value="contract">Profile: Contract</option>
+                    <option value="sop">Profile: SOP</option>
                 </select>
             </div>
 

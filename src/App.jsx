@@ -7,12 +7,20 @@ import { Table } from '@tiptap/extension-table'
 import { TableRow } from '@tiptap/extension-table-row'
 import { TableCell } from '@tiptap/extension-table-cell'
 import { TableHeader } from '@tiptap/extension-table-header'
-
+import { extractPlaceholdersFromText } from './utils/resolveVariables'
 import { MenuBar } from './components/MenuBar'
 import StatusBar from './components/StatusBar'
 import LinkModal from './components/LinkModal'
 import PreviewModal from './components/PreviewModal'
 import SideBySideViewer from './diff/SideBySideViewer'
+
+import VariablesPanel from './components/contract/VariablesPanel'
+import WorkflowTimeline from './components/contract/WorkflowTimeline'
+import ReviewActions from './components/contract/ReviewActions'
+
+import useContractVariables from './hooks/useContractVariables'
+import useWorkflowState from './hooks/useWorkflowState'
+import { WORKFLOW_LABELS } from './utils/contractConstants'
 
 import { debounce } from 'lodash'
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
@@ -46,21 +54,61 @@ const App = () => {
   const [blockCount, setBlockCount] = useState(0)
   const [isLinkModalOpen, setIsLinkModalOpen] = useState(false)
   const [linkModalInitialUrl, setLinkModalInitialUrl] = useState('')
-  const [profile, setProfile] = useState('Contract')
+  const [profile, setProfile] = useState('contract')
   const [isPreviewModalOpen, setIsPreviewModalOpen] = useState(false)
 
   const [diffOldVersion, setDiffOldVersion] = useState(null)
   const [diffNewVersion, setDiffNewVersion] = useState(null)
   const [isDiffMode, setIsDiffMode] = useState(false)
 
+  const [showVariablesPanel, setShowVariablesPanel] = useState(true)
+
+  const {
+    variables,
+    setVariables,
+    updateVariable,
+    variableEntries,
+    resetVariables,
+    syncPlaceholders,
+  } = useContractVariables()
+
+  const {
+    workflowStatus,
+    setUnderReview,
+    setAccepted,
+    setChangesRequested,
+    setRejected,
+  } = useWorkflowState()
+
+  const normalizedProfile = profile?.toLowerCase() || 'contract'
+
+  const handleProfileChange = useCallback((value) => {
+    setProfile(value?.toLowerCase() || 'contract')
+  }, [])
+
+  useEffect(() => {
+    if (normalizedProfile === 'contract') {
+      setShowVariablesPanel(true)
+    }
+  }, [normalizedProfile])
+
   const debouncedSave = useMemo(
     () =>
       debounce((json, vId, setVersionsRef, setLastSavedRef, setIsSavingRef) => {
         setIsSavingRef(true)
-        setVersionsRef(prev => {
-          const updated = prev.map(v =>
+        setVersionsRef((prev) => {
+          const updated = prev.map((v) =>
             v.id === vId
-              ? { ...v, json, timestamp: formatTimestamp(new Date()), isFormatted: true }
+              ? {
+                ...v,
+                json,
+                timestamp: formatTimestamp(new Date()),
+                isFormatted: true,
+                metadata: {
+                  ...(v.metadata || {}),
+                  variables,
+                },
+              }
               : v
           )
           saveToStorage(updated)
@@ -69,7 +117,7 @@ const App = () => {
           return updated
         })
       }, 2000),
-    []
+    [variables]
   )
 
   const manualSave = useCallback(() => {
@@ -80,10 +128,19 @@ const App = () => {
 
     const json = window.editorInstance.getJSON()
 
-    setVersions(prev => {
-      const updated = prev.map(v =>
+    setVersions((prev) => {
+      const updated = prev.map((v) =>
         v.id === currentVersionId
-          ? { ...v, json, timestamp: formatTimestamp(new Date()), isFormatted: true }
+          ? {
+            ...v,
+            json,
+            timestamp: formatTimestamp(new Date()),
+            isFormatted: true,
+            metadata: {
+              ...(v.metadata || {}),
+              variables,
+            },
+          }
           : v
       )
       saveToStorage(updated)
@@ -91,12 +148,12 @@ const App = () => {
       setTimeout(() => setIsSaving(false), 800)
       return updated
     })
-  }, [currentVersionId, debouncedSave])
+  }, [currentVersionId, debouncedSave, variables])
 
   const createNewVersion = useCallback(() => {
     if (!window.editorInstance) return
 
-    setVersions(prev => {
+    setVersions((prev) => {
       const versionNumber = prev.length + 1
       const newId = `v${versionNumber}`
       const json = window.editorInstance.getJSON()
@@ -105,7 +162,10 @@ const App = () => {
         id: newId,
         json,
         timestamp: formatTimestamp(new Date()),
-        isFormatted: true
+        isFormatted: true,
+        metadata: {
+          variables,
+        },
       }
 
       const updated = [...prev, newVersion]
@@ -113,25 +173,28 @@ const App = () => {
       setCurrentVersionId(newId)
       return updated
     })
-  }, [])
+  }, [variables])
 
-  const extensions = useMemo(() => [
-    StarterKit,
-    Underline,
-    Link.configure({
-      openOnClick: true,
-      autolink: true,
-      linkOnPaste: true
-    }),
-    UniqueID.configure({
-      types: ['heading', 'paragraph', 'bulletList', 'orderedList', 'table'],
-      attributeName: 'block-id'
-    }),
-    Table.configure({ resizable: true }),
-    TableRow,
-    TableHeader,
-    TableCell
-  ], [])
+  const extensions = useMemo(
+    () => [
+      StarterKit,
+      Underline,
+      Link.configure({
+        openOnClick: true,
+        autolink: true,
+        linkOnPaste: true,
+      }),
+      UniqueID.configure({
+        types: ['heading', 'paragraph', 'bulletList', 'orderedList', 'table'],
+        attributeName: 'block-id',
+      }),
+      Table.configure({ resizable: true }),
+      TableRow,
+      TableHeader,
+      TableCell,
+    ],
+    []
+  )
 
   const editor = useEditor({
     extensions,
@@ -209,7 +272,6 @@ const App = () => {
           return true
         }
 
-
         if (mod && e.shiftKey && key === 'x') {
           e.preventDefault()
           editor?.chain().focus().toggleStrike().run()
@@ -217,8 +279,8 @@ const App = () => {
         }
 
         return false
-      }
-    }
+      },
+    },
   })
 
   useEffect(() => {
@@ -243,13 +305,17 @@ const App = () => {
     }
   }, [editor, currentVersionId, debouncedSave])
 
-  const loadVersion = useCallback((versionId) => {
-    const version = versions.find(v => v.id === versionId)
-    if (version && editor) {
-      editor.commands.setContent(version.json, false)
-      setCurrentVersionId(versionId)
-    }
-  }, [editor, versions])
+  const loadVersion = useCallback(
+    (versionId) => {
+      const version = versions.find((v) => v.id === versionId)
+      if (version && editor) {
+        editor.commands.setContent(version.json, false)
+        setCurrentVersionId(versionId)
+        setVariables(version.metadata?.variables || {})
+      }
+    },
+    [editor, versions, setVariables]
+  )
 
   const text = editor?.getText() || ''
   const wordCount = text.split(/\s+/).filter(Boolean).length || 0
@@ -260,7 +326,7 @@ const App = () => {
 
     const updateBlockCount = () => {
       let count = 0
-      editor.state.doc.descendants(node => {
+      editor.state.doc.descendants((node) => {
         if (node.attrs?.['block-id']) count++
       })
       setBlockCount(count)
@@ -282,30 +348,56 @@ const App = () => {
       const lastVersion = saved[saved.length - 1]
       setCurrentVersionId(lastVersion.id)
       editor.commands.setContent(lastVersion.json, false)
+      setVariables(lastVersion.metadata?.variables || {})
     } else {
       const initialContent = {
         type: 'doc',
         content: [
           { type: 'heading', attrs: { level: 1 }, content: [{ type: 'text', text: 'AI Law Document Example' }] },
-          { type: 'paragraph', content: [{ type: 'text', text: 'Testing versioning, block IDs and table structure.' }] }
-        ]
+          { type: 'paragraph', content: [{ type: 'text', text: 'Testing versioning, block IDs and table structure.' }] },
+        ],
       }
 
       const initialVersion = {
         id: 'v1',
         json: initialContent,
         timestamp: formatTimestamp(new Date()),
-        isFormatted: true
+        isFormatted: true,
+        metadata: {
+          variables: {},
+        },
       }
 
       setVersions([initialVersion])
       setCurrentVersionId('v1')
       editor.commands.setContent(initialContent, false)
+      setVariables(initialVersion.metadata?.variables || {})
       saveToStorage([initialVersion])
     }
 
     isInitialized.current = true
-  }, [editor])
+  }, [editor, setVariables])
+
+  useEffect(() => {
+    if (!editor) return
+
+    const updatePlaceholdersFromEditor = () => {
+      const text = editor.getText()
+      const placeholders = extractPlaceholdersFromText(text)
+      syncPlaceholders(placeholders)
+    }
+
+    const timeout = setTimeout(() => {
+      updatePlaceholdersFromEditor()
+    }, 0)
+
+    editor.on('update', updatePlaceholdersFromEditor)
+
+    return () => {
+      clearTimeout(timeout)
+      editor.off('update', updatePlaceholdersFromEditor)
+    }
+  }, [editor, syncPlaceholders])
 
   if (!editor) return <div className="loading">Loading AI-LAW Editor...</div>
 
@@ -318,11 +410,16 @@ const App = () => {
     setIsLinkModalOpen(false)
   }
 
+  const insertPlaceholder = useCallback((name) => {
+    if (!editor) return
+    editor.chain().focus().insertContent(`{{${name}}}`).run()
+  }, [editor])
+
   const compareTwoVersions = (v1, v2) => {
     if (!versions || versions.length < 1) return
 
-    const version1 = versions.find(v => v.id === v1)
-    const version2 = versions.find(v => v.id === v2)
+    const version1 = versions.find((v) => v.id === v1)
+    const version2 = versions.find((v) => v.id === v2)
 
     if (!version1 || !version2) return
 
@@ -346,10 +443,38 @@ const App = () => {
           setIsLinkModalOpen(true)
         }}
         onOpenPreview={() => setIsPreviewModalOpen(true)}
+        profile={normalizedProfile}
+        onToggleVariablesPanel={() => setShowVariablesPanel((prev) => !prev)}
+        onSendForReview={setUnderReview}
+        onInsertPlaceholder={insertPlaceholder}
       />
 
-      <div ref={editorRef} className="pdf-export-wrapper">
-        <EditorContent editor={editor} />
+      <div className={`editor-layout ${normalizedProfile === 'contract' && showVariablesPanel ? 'with-right-panel' : ''}`}>
+        <div className="center-editor">
+          <div ref={editorRef} className="pdf-export-wrapper">
+            <EditorContent editor={editor} />
+          </div>
+        </div>
+
+        {normalizedProfile === 'contract' && showVariablesPanel && (
+          <div className="right-panel">
+            <VariablesPanel
+              variableEntries={variableEntries}
+              onChange={updateVariable}
+              onReset={resetVariables}
+            />
+
+            <ReviewActions
+              workflowStatus={WORKFLOW_LABELS[workflowStatus] || workflowStatus}
+              setUnderReview={setUnderReview}
+              setAccepted={setAccepted}
+              setChangesRequested={setChangesRequested}
+              setRejected={setRejected}
+            />
+
+            <WorkflowTimeline workflowStatus={workflowStatus} />
+          </div>
+        )}
       </div>
 
       <StatusBar
@@ -358,8 +483,9 @@ const App = () => {
         blockCount={blockCount}
         lastSaved={lastSaved}
         isSaving={isSaving}
-        profile={profile}
-        onProfileChange={setProfile}
+        profile={normalizedProfile}
+        onProfileChange={handleProfileChange}
+        workflowStatus={workflowStatus}
       />
 
       <LinkModal
@@ -374,6 +500,8 @@ const App = () => {
         onClose={() => setIsPreviewModalOpen(false)}
         editor={editor}
         versionId={currentVersionId}
+        profile={normalizedProfile}
+        contractVariables={variables}
       />
 
       {isDiffMode && (

@@ -1,5 +1,7 @@
 import { useEditorState } from "@tiptap/react";
 import { menuBarStateSelector } from "./menuBarState";
+import { useState } from "react";
+
 
 const isMac = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform)
 
@@ -19,11 +21,22 @@ export const MenuBar = ({
     onOpenLinkModal,
     onCompare,
     onOpenPreview,
+    onInsertPlaceholder,
+    profile,
+    onToggleVariablesPanel,
+    onSendForReview,
 }) => {
     const editorState = useEditorState({
         editor,
         selector: menuBarStateSelector,
     });
+
+
+    const [selectedPlaceholder, setSelectedPlaceholder] = useState("");
+
+
+
+
 
     if (!editor) return null;
 
@@ -185,6 +198,44 @@ export const MenuBar = ({
                 >
                     Insert URL
                 </button>
+
+
+                {profile?.toLowerCase() === 'contract' && (
+                    <select
+                        className="version-select"
+                        value={selectedPlaceholder}
+                        onChange={(e) => {
+                            const value = e.target.value
+                            setSelectedPlaceholder(value)
+
+                            if (!value) return
+
+                            if (value === '__custom__') {
+                                const customName = window.prompt('Enter custom placeholder name')
+                                if (customName?.trim()) {
+                                    onInsertPlaceholder?.(customName.trim())
+                                    setSelectedPlaceholder(customName.trim())
+                                }
+                            } else {
+                                onInsertPlaceholder?.(value)
+                            }
+                        }}
+                    >
+                        <option value="">Insert Placeholder</option>
+                        <option value="ClientName">Client Name</option>
+                        <option value="Address">Address</option>
+                        <option value="Date">Date</option>
+                        <option value="Amount">Amount</option>
+                        <option value="__custom__">Custom...</option>
+                    </select>
+                )}
+
+
+
+
+
+
+
 
                 <div className="compare-controls">
                     <select
