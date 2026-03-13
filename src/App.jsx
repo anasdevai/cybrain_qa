@@ -295,12 +295,18 @@ const App = () => {
   }, [editor])
 
 
-
   useEffect(() => {
     if (!editor) return;
 
-    editor.storage.placeholderSuggestion.items = Object.keys(variables || {});
-  }, [editor, variables]);
+    editor.storage.placeholderSuggestion.items = [
+      'ClientName',
+      'Address',
+      'Date',
+      'Amount',
+    ];
+  }, [editor]);
+
+
 
   useEffect(() => {
     if (!editor) return
