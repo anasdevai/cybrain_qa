@@ -46,7 +46,7 @@ body {
   gap: 8px;
   padding: 16px;
   background: white;
-  border: 2px solid #e2e8f0;
+  border: 2px solid #021023;
   border-radius: 16px;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
 }
@@ -123,13 +123,6 @@ body {
   font-size: 14px;
   color: #6b7280;
 }
-
-
-
-
-
-
-
 
 .button-group button:hover:not(:disabled) {
   background: #f8fafc;
@@ -209,7 +202,7 @@ body {
 .tiptap {
   background: white;
   color: #1f2937;
-  border: 2px solid #e2e8f0;
+  border: 2px solid #0d1f35;
   padding: 28px;
   border-radius: 20px;
   min-height: 600px;
@@ -309,9 +302,9 @@ body {
 
 .contract-panel {
   background: #ffffff;
-  border: 1px solid #dbe2ea;
-  border-radius: 16px;
-  padding: 16px;
+  border: 1px solid #021023;
+  border-radius: 30px;
+  padding: 12px;
   box-sizing: border-box;
 }
 
@@ -780,6 +773,7 @@ body {
   }
 }
 
+
 /* TABLET */
 @media (max-width: 1024px) {
 
@@ -874,6 +868,7 @@ body {
     max-height: 90vh;
   }
 }
+
 
 /* SMALL PHONES */
 @media (max-width: 480px) {
