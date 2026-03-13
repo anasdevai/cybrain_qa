@@ -1,8 +1,25 @@
+/**
+ * PreviewModal.jsx
+ * 
+ * Provides a modal dialog that renders the current document in a paginated, 
+ * print-ready preview format. It also supplies functionality to export the 
+ * document as a pristine PDF or a styled Word Document (.doc format).
+ */
+
 import React, { useRef, useState } from 'react';
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
 import { resolveTextWithVariables } from '../utils/resolveVariables';
 
+/**
+ * Preview and Export Modal Component.
+ * @param {Object} props
+ * @param {boolean} props.isOpen - Determines if the modal is currently visible.
+ * @param {Function} props.onClose - Triggered to close the modal.
+ * @param {Object} props.editor - Tiptap editor instance containing the content.
+ * @param {string} props.versionId - Version label used for naming exported files.
+ * @param {Object} props.contractVariables - Map of variable keys to user inputs for placeholder interpolation.
+ */
 const PreviewModal = ({
     isOpen,
     onClose,
@@ -16,9 +33,16 @@ const PreviewModal = ({
 
     if (!isOpen || !editor) return null;
 
+    // Raw HTML exported from the editor instance
     const rawContent = editor.getHTML();
+    // HTML where all {{variable}} placeholders are substituted with actual string values
     const resolvedContent = resolveTextWithVariables(rawContent, contractVariables);
 
+    /**
+     * Parses the rendered HTML and meticulously cleans up UI-specific classes, 
+     * metadata attributes, and applies strict inline styling suitable for raw physical printing or PDF export.
+     * @returns {string} Sanitized, print-ready HTML string.
+     */
     const buildCleanExportHtml = () => {
         const parser = new DOMParser();
         const doc = parser.parseFromString(resolvedContent, 'text/html');
@@ -61,6 +85,12 @@ const PreviewModal = ({
         return doc.body.innerHTML;
     };
 
+    /**
+     * Constructs a hidden div floating off-screen to mount the cleaned HTML.
+     * This forces the browser to render the exact pixel layout of the document 
+     * so that `html2canvas` can accurately capture a screenshot of it for the PDF.
+     * @returns {HTMLElement} A DOM node containing the fully styled print preview block.
+     */
     const buildExportContainer = () => {
         const cleanContent = buildCleanExportHtml();
 
@@ -175,6 +205,10 @@ const PreviewModal = ({
         return exportWrapper;
     };
 
+    /**
+     * Triggered when the user clicks 'Print'. Opens an invisible/temporary popup window,
+     * writes the cleaned HTML into it with specific `@page` CSS directives, and automatically fires the browser print dialog.
+     */
     const handlePrint = () => {
         const cleanContent = buildCleanExportHtml();
         const printWindow = window.open('', '_blank');
@@ -249,6 +283,11 @@ const PreviewModal = ({
         printWindow.document.close();
     };
 
+    /**
+     * Asynchronous PDF generation routine. Captures the hidden off-screen layout via `html2canvas`,
+     * converts the canvas to an image, calculates paginations based on the specified orientation,
+     * builds the pages in `jsPDF`, and triggers a file download.
+     */
     const handleExportPDF = async () => {
         const exportWrapper = buildExportContainer();
         document.body.appendChild(exportWrapper);
@@ -298,6 +337,10 @@ const PreviewModal = ({
         }
     };
 
+    /**
+     * Converts the editor content into an encapsulated HTML document structure 
+     * that Microsoft Word can interpret natively, adds `.doc` mime-types, and initiates a download.
+     */
     const handleExportWord = () => {
         const parser = new DOMParser();
         const doc = parser.parseFromString(resolvedContent, 'text/html');

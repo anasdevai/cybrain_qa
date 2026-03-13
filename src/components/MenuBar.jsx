@@ -1,16 +1,41 @@
+/**
+ * MenuBar.jsx
+ * 
+ * Renders the top formatting and action toolbar for the editor.
+ * Provides buttons for styling text, saving, creating versions,
+ * exporting, comparing versions, and inserting tables/placeholders.
+ */
+
 import { useEditorState } from "@tiptap/react";
 import { menuBarStateSelector } from "./menuBarState";
 import { useState } from "react";
 import { useLanguage } from "../context/LanguageContext";
 
+// Utility to determine OS for keyboard shortcuts
 const isMac = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform)
-
 const modKey = isMac ? "Cmd" : "Ctrl"
-
 const shortcut = (key) => `${modKey} + ${key}`
 const shortcutShift = (key) => `${modKey} + Shift + ${key}`
 const shortcutAlt = (key) => `${modKey} + Alt + ${key}`
 
+/**
+ * MenuBar Component
+ * 
+ * @param {Object} props
+ * @param {Object} props.editor - The Tiptap editor instance.
+ * @param {Function} props.onSave - Callback to trigger manual save.
+ * @param {Function} props.onNewVersion - Callback to create a new version.
+ * @param {string} props.currentVersion - The ID of the currently active version.
+ * @param {Function} props.onLoadVersion - Callback when a version is selected from the dropdown.
+ * @param {Array} props.versions - List of all document versions.
+ * @param {Function} props.onOpenLinkModal - Callback to open the insert link modal.
+ * @param {Function} props.onCompare - Callback to compare two selected versions.
+ * @param {Function} props.onOpenPreview - Callback to open the PDF/preview modal.
+ * @param {Function} props.onInsertPlaceholder - Callback when a placeholder variable is selected.
+ * @param {string} props.profile - The active user profile ('contract', 'simple').
+ * @param {Function} props.onToggleVariablesPanel - Callback to toggle the variables sidebar.
+ * @param {Function} props.onSendForReview - Callback to start the review workflow.
+ */
 export const MenuBar = ({
     editor,
     onSave,
@@ -26,6 +51,7 @@ export const MenuBar = ({
     onToggleVariablesPanel,
     onSendForReview,
 }) => {
+    // Subscribes to editor state changes (e.g., is text bold?) efficiently
     const editorState = useEditorState({
         editor,
         selector: menuBarStateSelector,
@@ -36,6 +62,7 @@ export const MenuBar = ({
 
     if (!editor) return null;
 
+    // Checks if cursor/selection is currently inside a table
     const isInTable = editor.isActive("table");
 
     return (

@@ -1,5 +1,21 @@
+/**
+ * ReviewActions.jsx
+ * 
+ * Renders a sidebar panel containing action buttons to progress
+ * the document's review workflow state (e.g., Send for Review, Accept, Reject).
+ */
 import { useLanguage } from '../../context/LanguageContext'
 
+/**
+ * ReviewActions Component
+ * 
+ * @param {Object} props
+ * @param {string} props.workflowStatus - Current status string for display.
+ * @param {Function} props.setUnderReview - Workflow transition function.
+ * @param {Function} props.setAccepted - Workflow transition function.
+ * @param {Function} props.setChangesRequested - Workflow transition function.
+ * @param {Function} props.setRejected - Workflow transition function.
+ */
 export default function ReviewActions({
     workflowStatus,
     setUnderReview,

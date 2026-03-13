@@ -1,3 +1,18 @@
+/**
+ * menuBarState.js
+ * 
+ * Provides a highly optimized selector function for Tiptap's `useEditorState` hook.
+ * Instead of re-rendering the entire MenuBar on every single keystroke or selection change,
+ * this selector extracts only the specific boolean states needed by the toolbar buttons
+ * (e.g., is bold active? can we undo?).
+ */
+
+/**
+ * Maps the current Tiptap editor context to a flat state object.
+ * 
+ * @param {Object} ctx - The Tiptap editor context.
+ * @returns {Object} An object containing boolean flags for formatting and history states.
+ */
 export function menuBarStateSelector(ctx) {
     return {
         // TEXT FORMATTING

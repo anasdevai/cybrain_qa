@@ -1,7 +1,21 @@
+/**
+ * TableComparator.js
+ * 
+ * Contains custom diffing logic specifically designed for Tiptap Table, TableRow, 
+ * and TableCell nodes. It iterates through the grid to identify added, removed, 
+ * or modified rows and cells to inject correct diffStatus metadata.
+ */
 import { compareBlocks } from './BlockComparator';
 
+/**
+ * Compares two table nodes traversing rows and columns to find differences.
+ * 
+ * @param {Object} oldTable - The Table node from the older document version.
+ * @param {Object} newTable - The Table node from the newer document version.
+ * @returns {Object} An object indicating if a change occurred alongside the annotated diff table node.
+ */
 export const compareTableNodes = (oldTable, newTable) => {
-    // If exact same table
+    // If exact same table reference or structurally identical strings
     if (JSON.stringify(oldTable) === JSON.stringify(newTable)) {
         return { isChanged: false, node: newTable };
     }
@@ -21,10 +35,10 @@ export const compareTableNodes = (oldTable, newTable) => {
         const newRow = newRows[i];
 
         if (!oldRow && newRow) {
-            // Row added
+            // Row added - append to diff marking it as new
             diffTable.content.push({ ...newRow, diffStatus: 'added' });
         } else if (oldRow && !newRow) {
-            // Row removed, we actually push the old row so the viewer can render it as removed
+            // Row removed - push the old row so the viewer can render it as deleted (red block)
             diffTable.content.push({ ...oldRow, diffStatus: 'removed' });
         } else {
             // Compare cells within the row
@@ -38,16 +52,19 @@ export const compareTableNodes = (oldTable, newTable) => {
                 const newCell = newCells[j];
 
                 if (!oldCell && newCell) {
+                    // Entire column/cell added
                     diffRow.content.push({ ...newCell, diffStatus: 'added' });
                 } else if (oldCell && !newCell) {
+                    // Entire column/cell removed
                     diffRow.content.push({ ...oldCell, diffStatus: 'removed' });
                 } else {
-                    // Both cells exist, compare them block by block
+                    // Both cells exist, compare them block by block using the text diff utility
                     const blockDiff = compareBlocks(oldCell, newCell);
                     if (blockDiff.isChanged) {
                         // The cell has changed internal text
                         diffRow.content.push({ ...blockDiff.node, diffStatus: 'modified' });
                     } else {
+                        // No changes inside this cell
                         diffRow.content.push(newCell);
                     }
                 }

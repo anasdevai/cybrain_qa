@@ -1,3 +1,11 @@
+/**
+ * App.jsx
+ * 
+ * Main application component for the AI-LAW Editor.
+ * This component handles the Tiptap editor initialization, state management for versions,
+ * contract variables, workflow status, and renders the layout including the MenuBar, 
+ * StatusBar, and various dialog modals.
+ */
 import { useEditor, EditorContent } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import UniqueID from '@tiptap/extension-unique-id'
@@ -31,6 +39,11 @@ import './App.css'
 
 const STORAGE_KEY = 'tiptap_editor_v5_stable'
 
+/**
+ * Formats a given Date object into a readable string format.
+ * @param {Date} date - The date to format.
+ * @returns {string} Formatted date string (e.g., DD/MM/YYYY , HH:MM am/pm).
+ */
 const formatTimestamp = (date) => {
   const d = date || new Date()
   const pad = (n) => n.toString().padStart(2, '0')
@@ -41,10 +54,17 @@ const formatTimestamp = (date) => {
   return `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()} , ${hours}:${pad(d.getMinutes())} ${ampm}`
 }
 
+/**
+ * Saves the current document versions to local storage.
+ * @param {Array} updatedVersions - Array of version objects to save.
+ */
 const saveToStorage = (updatedVersions) => {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(updatedVersions))
 }
 
+/**
+ * Main App Component
+ */
 const App = () => {
   const editorRef = useRef(null)
   const isInitialized = useRef(false)
@@ -84,16 +104,22 @@ const App = () => {
 
   const normalizedProfile = profile?.toLowerCase() || 'contract'
 
+  // Update profile type ensuring it defaults to 'contract'
   const handleProfileChange = useCallback((value) => {
     setProfile(value?.toLowerCase() || 'contract')
   }, [])
 
+  // Auto-show variables panel when profile is 'contract'
   useEffect(() => {
     if (normalizedProfile === 'contract') {
       setShowVariablesPanel(true)
     }
   }, [normalizedProfile])
 
+  /**
+   * Debounced function to auto-save document changes.
+   * Prevents saving on every keystroke and instead waits for a pause in typing.
+   */
   const debouncedSave = useMemo(
     () =>
       debounce((json, vId, setVersionsRef, setLastSavedRef, setIsSavingRef) => {
@@ -122,6 +148,9 @@ const App = () => {
     [variables]
   )
 
+  /**
+   * Manually saves the current editor state immediately, bypassing debounce.
+   */
   const manualSave = useCallback(() => {
     if (!window.editorInstance) return
 
@@ -152,6 +181,9 @@ const App = () => {
     })
   }, [currentVersionId, debouncedSave, variables])
 
+  /**
+   * Creates a new document version snapshot.
+   */
   const createNewVersion = useCallback(() => {
     if (!window.editorInstance) return
 
@@ -177,6 +209,7 @@ const App = () => {
     })
   }, [variables])
 
+  // Initialize Tiptap editor extensions
   const extensions = useMemo(
     () => [
       StarterKit,
@@ -335,6 +368,7 @@ const App = () => {
     [editor, versions, setVariables]
   )
 
+  // Compute stats like word and character counts
   const text = editor?.getText() || ''
   const wordCount = text.split(/\s+/).filter(Boolean).length || 0
   const charCount = text.length || 0

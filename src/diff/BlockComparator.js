@@ -1,6 +1,18 @@
+/**
+ * BlockComparator.js
+ * 
+ * Provides utility functions for comparing corresponding text blocks
+ * (e.g., paragraphs or list items) between two different document versions.
+ * Uses the external `diff` package to compute word-level changes.
+ */
+
 import { diffWords } from 'diff';
 
-// A simple utility to get plain text from a node's content array
+/**
+ * Recursively extracts plain text from a parsed Tiptap node and its children.
+ * @param {Object} node - A Tiptap document block node.
+ * @returns {string} The aggregated plain string text.
+ */
 export const extractTextFromNode = (node) => {
     if (!node) return '';
     if (node.type === 'text') return node.text || '';
@@ -10,6 +22,14 @@ export const extractTextFromNode = (node) => {
     return '';
 };
 
+/**
+ * Compares two corresponding blocks (matched via ID) from different versions
+ * and generates a structured difference map separating words into added, removed, or unmodified.
+ * 
+ * @param {Object} oldNode - The block from the older document version.
+ * @param {Object} newNode - The block from the newer document version.
+ * @returns {Object} An object indicating if a change occurred and a special diff container node.
+ */
 export const compareBlocks = (oldNode, newNode) => {
     // If they are exactly the same reference or stringified exactly the same
     if (JSON.stringify(oldNode) === JSON.stringify(newNode)) {

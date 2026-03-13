@@ -1,9 +1,25 @@
+/**
+ * LinkModal.jsx
+ * 
+ * A reusable modal dialog component for inserting or editing hyperlinks
+ * within the Tiptap editor. Handles focus management and basic URL validation.
+ */
 import React, { useState, useEffect, useRef } from 'react';
 
+/**
+ * Link insertion modal component.
+ * 
+ * @param {Object} props
+ * @param {boolean} props.isOpen - Whether the modal is currently displayed.
+ * @param {Function} props.onClose - Triggered to dismiss the modal without saving.
+ * @param {Function} props.onSave - Triggered to apply the URL to the editor selection.
+ * @param {string} props.initialUrl - Pre-populated URL (e.g., if editing an existing link).
+ */
 const LinkModal = ({ isOpen, onClose, onSave, initialUrl = '' }) => {
     const [url, setUrl] = useState(initialUrl);
     const inputRef = useRef(null);
 
+    // Auto-focus the input cleanly whenever the modal is shown
     useEffect(() => {
         if (isOpen) {
             setUrl(initialUrl);

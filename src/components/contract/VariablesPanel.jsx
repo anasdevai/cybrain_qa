@@ -1,5 +1,20 @@
+/**
+ * VariablesPanel.jsx
+ * 
+ * Renders a sidebar panel displaying a list of all detected placeholder variables
+ * within the document. Allows the user to input values to resolve these placeholders
+ * and track which variables are still 'missing'.
+ */
 import { useLanguage } from '../../context/LanguageContext'
 
+/**
+ * VariablesPanel Component
+ * 
+ * @param {Object} props
+ * @param {Array} props.variableEntries - Structured array of variables (name, value, status).
+ * @param {Function} props.onChange - Callback fired when a variable input changes.
+ * @param {Function} props.onReset - Callback to clear all variable values.
+ */
 export default function VariablesPanel({
     variableEntries = [],
     onChange,

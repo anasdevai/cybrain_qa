@@ -1,6 +1,22 @@
 import React from 'react';
 import { useLanguage } from '../context/LanguageContext';
 
+/**
+ * StatusBar Component
+ * 
+ * Displays live document statistics (word count, char count, block count),
+ * global configuration selectors (active profile, language toggles),
+ * and the save state indicator at the bottom of the editor.
+ * 
+ * @param {Object} props
+ * @param {number} props.wordCount - Number of words in the active document.
+ * @param {number} props.charCount - Number of characters in the active document.
+ * @param {number} props.blockCount - Number of top-level blocks in the document.
+ * @param {Date|null} props.lastSaved - Timestamp of the most recent save.
+ * @param {boolean} props.isSaving - Whether a save operation is currently in progress.
+ * @param {string} props.profile - The selected editing profile (e.g., "contract" or "sop").
+ * @param {Function} props.onProfileChange - Callback triggered when profile selection changes.
+ */
 const StatusBar = ({
     wordCount,
     charCount = 0,
@@ -10,6 +26,7 @@ const StatusBar = ({
     profile = "contract",
     onProfileChange,
 }) => {
+    // Utilize globalization context to translate UI strings
     const { language, setLanguage, t } = useLanguage();
 
     return (

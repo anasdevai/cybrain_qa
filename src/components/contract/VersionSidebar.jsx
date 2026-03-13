@@ -1,3 +1,18 @@
+/**
+ * VersionSidebar.jsx
+ * 
+ * A complementary sidebar component to list all saved versions 
+ * of the current document, enabling rapid switching between states.
+ */
+
+/**
+ * VersionSidebar Component
+ * 
+ * @param {Object} props
+ * @param {Array} props.versions - List of version objects.
+ * @param {string} props.currentVersion - The ID of the currently loaded version.
+ * @param {Function} props.onLoadVersion - Callback when a version item is clicked.
+ */
 export default function VersionSidebar({
     versions = [],
     currentVersion,

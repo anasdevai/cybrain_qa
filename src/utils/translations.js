@@ -1,3 +1,9 @@
+/**
+ * translations.js
+ * 
+ * Centralized dictionary for application strings to support internationalization.
+ * Currently supports English (en) and German (de).
+ */
 export const translations = {
     en: {
         save: 'Save',
