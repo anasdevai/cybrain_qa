@@ -1,6 +1,6 @@
 /**
  * App.jsx
- * 
+ *
  * Main application component for the AI-LAW Editor.
  * This component handles the Tiptap editor initialization, state management for versions,
  * contract variables, workflow status, OCR upload, and renders the layout including the MenuBar,
@@ -15,7 +15,7 @@ import { Table } from '@tiptap/extension-table'
 import { TableRow } from '@tiptap/extension-table-row'
 import { TableCell } from '@tiptap/extension-table-cell'
 import { TableHeader } from '@tiptap/extension-table-header'
-import { extractPlaceholdersFromText, resolveTextWithVariables } from './utils/resolveVariables'
+import { extractPlaceholdersFromText } from './utils/resolveVariables'
 import { printDocument } from './utils/printHelpers'
 import { MenuBar } from './components/MenuBar'
 import StatusBar from './components/StatusBar'
@@ -26,9 +26,11 @@ import SideBySideViewer from './diff/SideBySideViewer'
 import VariablesPanel from './components/contract/VariablesPanel'
 import WorkflowTimeline from './components/contract/WorkflowTimeline'
 import ReviewActions from './components/contract/ReviewActions'
+import ReviewLinkPanel from './components/contract/ReviewLinkPanel'
 
 import useContractVariables from './hooks/useContractVariables'
 import { WORKFLOW_LABELS, WORKFLOW_STATES } from './utils/contractConstants'
+import { createReviewToken, buildReviewLink, getReviewParamsFromUrl } from './utils/reviewLinkUtils'
 
 import { debounce } from 'lodash'
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
@@ -43,11 +45,6 @@ import './App.css'
 
 const STORAGE_KEY = 'tiptap_editor_v5_stable'
 
-/**
- * Formats a given Date object into a readable string format.
- * @param {Date} date - The date to format.
- * @returns {string} Formatted date string (e.g., DD/MM/YYYY , HH:MM am/pm).
- */
 const formatTimestamp = (date) => {
   const d = date || new Date()
   const pad = (n) => n.toString().padStart(2, '0')
@@ -58,17 +55,10 @@ const formatTimestamp = (date) => {
   return `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()} , ${hours}:${pad(d.getMinutes())} ${ampm}`
 }
 
-/**
- * Saves the current document versions to local storage.
- * @param {Array} updatedVersions - Array of version objects to save.
- */
 const saveToStorage = (updatedVersions) => {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(updatedVersions))
 }
 
-/**
- * Main App Component
- */
 const App = () => {
   const editorRef = useRef(null)
   const isInitialized = useRef(false)
@@ -92,6 +82,10 @@ const App = () => {
   const [isOcrLoading, setIsOcrLoading] = useState(false)
   const [ocrError, setOcrError] = useState('')
 
+  const [isClientReviewMode, setIsClientReviewMode] = useState(false)
+  const [reviewLink, setReviewLink] = useState('')
+  const [reviewToken, setReviewToken] = useState(null)
+
   const {
     variables,
     setVariables,
@@ -114,7 +108,9 @@ const App = () => {
   const currentSentForReviewAt =
     currentVersion?.metadata?.sentForReviewAt || null
 
-  // Update profile type ensuring it defaults to 'contract'
+  const currentReviewToken =
+    currentVersion?.metadata?.reviewToken || null
+
   const handleProfileChange = useCallback((value) => {
     setProfile(value?.toLowerCase() || 'contract')
   }, [])
@@ -185,12 +181,23 @@ const App = () => {
     [currentVersion, updateCurrentVersionMetadata]
   )
 
-  // Auto-show variables panel when profile is 'contract'
-  useEffect(() => {
-    if (normalizedProfile === 'contract') {
-      setShowVariablesPanel(true)
-    }
-  }, [normalizedProfile])
+  const generateReviewLink = useCallback(() => {
+    if (!currentVersionId) return
+
+    const token = currentReviewToken || createReviewToken()
+
+    updateCurrentVersionMetadata({
+      reviewToken: token,
+    })
+
+    const link = buildReviewLink({
+      token,
+      versionId: currentVersionId,
+    })
+
+    setReviewToken(token)
+    setReviewLink(link)
+  }, [currentVersionId, currentReviewToken, updateCurrentVersionMetadata])
 
   const debouncedSave = useMemo(
     () =>
@@ -220,7 +227,6 @@ const App = () => {
     [variables]
   )
 
-  // Initialize Tiptap editor extensions
   const extensions = useMemo(
     () => [
       StarterKit,
@@ -319,6 +325,42 @@ const App = () => {
     },
   })
 
+  const openVersionInClientReviewMode = useCallback(
+    (tokenFromUrl, versionIdFromUrl) => {
+      if (!tokenFromUrl || !versionIdFromUrl || !editor || versions.length === 0) return
+
+      const matchedVersion = versions.find(
+        (v) =>
+          v.id === versionIdFromUrl &&
+          v.metadata?.reviewToken === tokenFromUrl
+      )
+
+      if (!matchedVersion) {
+        setIsClientReviewMode(false)
+        return
+      }
+
+      setCurrentVersionId(matchedVersion.id)
+      editor.commands.setContent(matchedVersion.json, false)
+      setVariables(matchedVersion.metadata?.variables || {})
+      setIsClientReviewMode(true)
+      setReviewToken(tokenFromUrl)
+      setReviewLink(
+        buildReviewLink({
+          token: tokenFromUrl,
+          versionId: matchedVersion.id,
+        })
+      )
+    },
+    [editor, versions, setVariables]
+  )
+
+  useEffect(() => {
+    if (normalizedProfile === 'contract') {
+      setShowVariablesPanel(true)
+    }
+  }, [normalizedProfile])
+
   useEffect(() => {
     if (editor) {
       window.editor = editor
@@ -333,18 +375,22 @@ const App = () => {
 
   useEffect(() => {
     if (!editor) return
+    editor.setEditable(!isClientReviewMode)
+  }, [editor, isClientReviewMode])
 
-    editor.storage.placeholderSuggestion.items = [
-      'ClientName',
-      'Address',
-      'Date',
-      'Amount',
-    ]
+  useEffect(() => {
+    if (!editor) return
+
+    if (editor.storage?.placeholderSuggestion) {
+      editor.storage.placeholderSuggestion.items = [
+        'ClientName',
+        'Address',
+        'Date',
+        'Amount',
+      ]
+    }
   }, [editor])
 
-  /**
-   * Manually saves the current editor state immediately, bypassing debounce.
-   */
   const manualSave = useCallback(() => {
     if (!editor) return
     debouncedSave.cancel()
@@ -388,11 +434,14 @@ const App = () => {
           reviewStatus: WORKFLOW_STATES.DRAFT,
           sentForReviewAt: null,
           reviewComments: [],
+          reviewToken: null,
         },
       }
       const updated = [...prev, newVersion]
       saveToStorage(updated)
       setCurrentVersionId(newId)
+      setReviewLink('')
+      setReviewToken(null)
       return updated
     })
   }, [editor, variables])
@@ -419,12 +468,23 @@ const App = () => {
         editor.commands.setContent(version.json, false)
         setCurrentVersionId(versionId)
         setVariables(version.metadata?.variables || {})
+        setReviewToken(version.metadata?.reviewToken || null)
+
+        if (version.metadata?.reviewToken) {
+          setReviewLink(
+            buildReviewLink({
+              token: version.metadata.reviewToken,
+              versionId,
+            })
+          )
+        } else {
+          setReviewLink('')
+        }
       }
     },
     [editor, versions, setVariables]
   )
 
-  // Compute stats like word and character counts
   const text = editor?.getText() || ''
   const wordCount = text.split(/\s+/).filter(Boolean).length || 0
   const charCount = text.length || 0
@@ -452,11 +512,33 @@ const App = () => {
     const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]')
 
     if (saved.length > 0) {
-      setVersions(saved)
-      const lastVersion = saved[saved.length - 1]
+      const normalizedSaved = saved.map((version) => ({
+        ...version,
+        metadata: {
+          ...(version.metadata || {}),
+          variables: version.metadata?.variables || {},
+          reviewStatus: version.metadata?.reviewStatus || WORKFLOW_STATES.DRAFT,
+          sentForReviewAt: version.metadata?.sentForReviewAt || null,
+          reviewComments: version.metadata?.reviewComments || [],
+          reviewToken: version.metadata?.reviewToken || null,
+        },
+      }))
+
+      setVersions(normalizedSaved)
+      const lastVersion = normalizedSaved[normalizedSaved.length - 1]
       setCurrentVersionId(lastVersion.id)
       editor.commands.setContent(lastVersion.json, false)
       setVariables(lastVersion.metadata?.variables || {})
+      setReviewToken(lastVersion.metadata?.reviewToken || null)
+
+      if (lastVersion.metadata?.reviewToken) {
+        setReviewLink(
+          buildReviewLink({
+            token: lastVersion.metadata.reviewToken,
+            versionId: lastVersion.id,
+          })
+        )
+      }
     } else {
       const initialContent = {
         type: 'doc',
@@ -483,6 +565,7 @@ const App = () => {
           reviewStatus: WORKFLOW_STATES.DRAFT,
           sentForReviewAt: null,
           reviewComments: [],
+          reviewToken: null,
         },
       }
 
@@ -497,11 +580,24 @@ const App = () => {
   }, [editor, setVariables])
 
   useEffect(() => {
+    if (!editor || versions.length === 0) return
+
+    const { reviewToken: tokenFromUrl, versionId: versionIdFromUrl } = getReviewParamsFromUrl()
+
+    if (!tokenFromUrl || !versionIdFromUrl) {
+      setIsClientReviewMode(false)
+      return
+    }
+
+    openVersionInClientReviewMode(tokenFromUrl, versionIdFromUrl)
+  }, [editor, versions, openVersionInClientReviewMode])
+
+  useEffect(() => {
     if (!editor) return
 
     const updatePlaceholdersFromEditor = () => {
-      const text = editor.getText()
-      const placeholders = extractPlaceholdersFromText(text)
+      const textContent = editor.getText()
+      const placeholders = extractPlaceholdersFromText(textContent)
       syncPlaceholders(placeholders)
     }
 
@@ -571,27 +667,24 @@ const App = () => {
     }
   }, [editor, normalizedProfile, syncPlaceholders])
 
-  // Global Shortcuts for saving, versioning, and printing
   useEffect(() => {
     const handleGlobalKeyDown = (e) => {
       const mod = e.ctrlKey || e.metaKey
       const key = e.key.toLowerCase()
 
       if (!editor) return
+      if (isClientReviewMode) return
 
-      // Ctrl + S (Save)
       if (mod && !e.shiftKey && !e.altKey && key === 's') {
         e.preventDefault()
         manualSave()
       }
 
-      // Ctrl + Shift + V (New Version)
       if (mod && e.shiftKey && !e.altKey && key === 'v') {
         e.preventDefault()
         createNewVersion()
       }
 
-      // Ctrl + P (Print) - Native Override
       if (mod && !e.shiftKey && !e.altKey && key === 'p') {
         e.preventDefault()
         printDocument(editor.getHTML(), variables)
@@ -600,7 +693,7 @@ const App = () => {
 
     window.addEventListener('keydown', handleGlobalKeyDown)
     return () => window.removeEventListener('keydown', handleGlobalKeyDown)
-  }, [editor, variables, manualSave, createNewVersion])
+  }, [editor, variables, manualSave, createNewVersion, isClientReviewMode])
 
   if (!editor) return <div className="loading">Loading AI-LAW Editor...</div>
 
@@ -633,27 +726,29 @@ const App = () => {
 
   return (
     <div className="editor-wrapper">
-      <MenuBar
-        editor={editor}
-        onSave={manualSave}
-        onNewVersion={createNewVersion}
-        currentVersion={currentVersionId}
-        onLoadVersion={loadVersion}
-        onCompare={compareTwoVersions}
-        versions={versions}
-        onOpenLinkModal={() => {
-          setLinkModalInitialUrl(editor.getAttributes('link')?.href || '')
-          setIsLinkModalOpen(true)
-        }}
-        onOpenPreview={() => setIsPreviewModalOpen(true)}
-        profile={normalizedProfile}
-        onToggleVariablesPanel={() => setShowVariablesPanel((prev) => !prev)}
-        onSendForReview={sendForReview}
-        onInsertPlaceholder={insertPlaceholder}
-        onOCRUpload={handleOCRUpload}
-        isOcrLoading={isOcrLoading}
-        ocrError={ocrError}
-      />
+      {!isClientReviewMode && (
+        <MenuBar
+          editor={editor}
+          onSave={manualSave}
+          onNewVersion={createNewVersion}
+          currentVersion={currentVersionId}
+          onLoadVersion={loadVersion}
+          onCompare={compareTwoVersions}
+          versions={versions}
+          onOpenLinkModal={() => {
+            setLinkModalInitialUrl(editor.getAttributes('link')?.href || '')
+            setIsLinkModalOpen(true)
+          }}
+          onOpenPreview={() => setIsPreviewModalOpen(true)}
+          profile={normalizedProfile}
+          onToggleVariablesPanel={() => setShowVariablesPanel((prev) => !prev)}
+          onSendForReview={sendForReview}
+          onInsertPlaceholder={insertPlaceholder}
+          onOCRUpload={handleOCRUpload}
+          isOcrLoading={isOcrLoading}
+          ocrError={ocrError}
+        />
+      )}
 
       <div className={`editor-layout ${normalizedProfile === 'contract' && showVariablesPanel ? 'with-right-panel' : ''}`}>
         <div className="center-editor">
@@ -664,10 +759,18 @@ const App = () => {
 
         {normalizedProfile === 'contract' && showVariablesPanel && (
           <div className="right-panel">
-            <VariablesPanel
-              variableEntries={variableEntries}
-              onChange={updateVariable}
-              onReset={resetVariables}
+            {!isClientReviewMode && (
+              <VariablesPanel
+                variableEntries={variableEntries}
+                onChange={updateVariable}
+                onReset={resetVariables}
+              />
+            )}
+
+            <ReviewLinkPanel
+              isClientReviewMode={isClientReviewMode}
+              reviewLink={reviewLink}
+              onGenerateReviewLink={generateReviewLink}
             />
 
             <ReviewActions
@@ -679,6 +782,7 @@ const App = () => {
               reviewComments={currentReviewComments}
               onAddComment={addReviewComment}
               sentForReviewAt={currentSentForReviewAt}
+              isClientReviewMode={isClientReviewMode}
             />
 
             <WorkflowTimeline workflowStatus={workflowStatus} />

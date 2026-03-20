@@ -525,12 +525,74 @@ body {
   border-radius: 10px;
   cursor: pointer;
   font-size: 14px;
+  display: block;
+  margin-left: 0;
+
 }
 
 .primary-btn {
   background: #4f46e5;
   color: white;
 }
+
+
+.review-comments-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.review-comment-item {
+  background: #f8fafc;
+  border: 1px solid #d1d5db;
+  border-radius: 10px;
+  padding: 10px 12px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+.review-comment-item p {
+  margin: 0 0 6px 0;
+  font-size: 15px;
+  color: #111827;
+  line-height: 1.5;
+  word-break: break-word;
+}
+
+.review-comment-item small {
+  display: block;
+  font-size: 12px;
+  color: #000000;
+}
+
+
+
+
+
+
+
+
+
+
+.review-link-box {
+  margin-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.review-link-input {
+  width: 100%;
+  padding: 10px;
+  border: 1px solid #dcdcdc;
+  border-radius: 8px;
+  font-size: 14px;
+}
+
+
+
+
+
 
 .secondary-btn {
   background: #e5e7eb;

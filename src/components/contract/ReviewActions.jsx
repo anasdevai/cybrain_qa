@@ -7,19 +7,6 @@
 import { useState } from 'react'
 import { useLanguage } from '../../context/LanguageContext'
 
-/**
- * ReviewActions Component
- * 
- * @param {Object} props
- * @param {string} props.workflowStatus - Current status string for display.
- * @param {Function} props.onSendForReview - Marks current version as in review.
- * @param {Function} props.onApprove - Marks current version as approved.
- * @param {Function} props.onRequestChanges - Marks current version as changes requested.
- * @param {Function} props.onReject - Marks current version as rejected.
- * @param {Array} props.reviewComments - Comments saved against current version.
- * @param {Function} props.onAddComment - Adds a review comment to current version.
- * @param {string|null} props.sentForReviewAt - Timestamp when sent for review.
- */
 export default function ReviewActions({
     workflowStatus,
     onSendForReview,
@@ -29,6 +16,7 @@ export default function ReviewActions({
     reviewComments = [],
     onAddComment,
     sentForReviewAt = null,
+    isClientReviewMode = false,
 }) {
     const { t } = useLanguage()
     const [commentText, setCommentText] = useState('')
@@ -49,18 +37,20 @@ export default function ReviewActions({
 
             {sentForReviewAt ? (
                 <p className="muted-text">
-                    {t.sentForReviewAt || 'Sent for review'}: {new Date(sentForReviewAt).toLocaleString()}
+                    Sent for review: {new Date(sentForReviewAt).toLocaleString()}
                 </p>
             ) : null}
 
             <div className="review-actions">
-                <button
-                    type="button"
-                    onClick={onSendForReview}
-                    className="primary-btn"
-                >
-                    {t.sendForReview}
-                </button>
+                {!isClientReviewMode && (
+                    <button
+                        type="button"
+                        onClick={onSendForReview}
+                        className="primary-btn"
+                    >
+                        {t.sendForReview}
+                    </button>
+                )}
 
                 <button
                     type="button"
@@ -88,12 +78,12 @@ export default function ReviewActions({
             </div>
 
             <div className="review-comments-section">
-                <h4>{t.comments || 'Comments'}</h4>
+                <h4>Comments</h4>
 
                 <textarea
                     value={commentText}
                     onChange={(e) => setCommentText(e.target.value)}
-                    placeholder={t.addReviewComment || 'Add review comment...'}
+                    placeholder="Add review comment..."
                     rows={4}
                 />
 
@@ -102,12 +92,12 @@ export default function ReviewActions({
                     onClick={handleAddComment}
                     className="primary-btn"
                 >
-                    {t.addComment || 'Add Comment'}
+                    Add Comment
                 </button>
 
                 <div className="review-comments-list">
                     {reviewComments.length === 0 ? (
-                        <p className="muted-text">{t.noReviewComments || 'No review comments yet.'}</p>
+                        <p className="muted-text">No review comments yet.</p>
                     ) : (
                         reviewComments.map((comment, index) => (
                             <div
