@@ -520,13 +520,20 @@ body {
 .success-btn,
 .warning-btn,
 .danger-btn {
-  padding: 10px 12px;
+  background: #5b4df3;
+  color: #fff;
   border: none;
   border-radius: 10px;
+  padding: 10px 16px;
+  min-width: 120px;
+  min-height: 40px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  white-space: nowrap;
   cursor: pointer;
   font-size: 14px;
-  display: block;
-  margin-left: 0;
+  font-weight: 500;
 
 }
 

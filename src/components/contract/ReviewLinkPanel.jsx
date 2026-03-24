@@ -1,10 +1,12 @@
 import { useState } from 'react'
+import { useLanguage } from '../../context/LanguageContext'
 
 export default function ReviewLinkPanel({
     isClientReviewMode,
     reviewLink,
     onGenerateReviewLink,
 }) {
+    const { t } = useLanguage()
     const [copied, setCopied] = useState(false)
 
     const handleCopy = async () => {
@@ -22,9 +24,9 @@ export default function ReviewLinkPanel({
     if (isClientReviewMode) {
         return (
             <div className="contract-panel">
-                <h3>Client Review Mode</h3>
+                <h3>{t.clientReviewMode}</h3>
                 <p className="muted-text">
-                    This document is opened through a shared review link and is read-only.
+                    {t.sharedReviewReadonly}
                 </p>
             </div>
         )
@@ -32,14 +34,14 @@ export default function ReviewLinkPanel({
 
     return (
         <div className="contract-panel">
-            <h3>Share Review Link</h3>
+            <h3>{t.shareReviewLink}</h3>
 
             <button
                 type="button"
                 onClick={onGenerateReviewLink}
                 className="primary-btn"
             >
-                Generate Review Link
+                {t.generateReviewLink}
             </button>
 
             {reviewLink ? (
@@ -54,9 +56,9 @@ export default function ReviewLinkPanel({
                     <button
                         type="button"
                         onClick={handleCopy}
-                        className="secondary-btn"
+                        className="secondary-btn copy-link-btn"
                     >
-                        {copied ? 'Copied' : 'Copy Link'}
+                        {copied ? t.copied : t.copyLink}
                     </button>
                 </div>
             ) : null}

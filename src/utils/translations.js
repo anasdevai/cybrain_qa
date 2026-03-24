@@ -57,9 +57,20 @@ export const translations = {
         resolved: 'Resolved',
         missing: 'Missing',
 
+        ocrUpload: 'OCR Upload',
+        ocrProcessing: 'OCR is processing...',
+        ocrError: 'OCR Error',
+
+        addComments: 'Add Comments',
+        addComment: 'Add Comment',
+        addReviewComment: 'Add review comment...',
+        noReviewComments: 'No review comments yet.',
+        comments: 'Comments',
+
         clientReview: 'Client Review',
         currentStatus: 'Current status',
         sendForReview: 'Send For Review',
+        sentForReview: 'Sent for review',
         accept: 'Accept',
         requestChanges: 'Request Changes',
         reject: 'Reject',
@@ -71,6 +82,14 @@ export const translations = {
         accepted: 'Accepted',
         rejected: 'Rejected',
         current: 'Current',
+
+        copyLink: 'Copy Link',
+        copied: 'Copied',
+
+        clientReviewMode: 'Client Review Mode',
+        sharedReviewReadonly: 'This document is opened through a shared review link and is read-only.',
+        shareReviewLink: 'Share Review Link',
+        generateReviewLink: 'Generate Review Link',
     },
 
     de: {
@@ -125,9 +144,20 @@ export const translations = {
         resolved: 'Ausgefüllt',
         missing: 'Fehlt',
 
+        ocrUpload: 'OCR-Upload',
+        ocrProcessing: 'OCR wird verarbeitet...',
+        ocrError: 'OCR-Fehler',
+
+        addComments: 'Kommentare hinzufügen',
+        addComment: 'Kommentar hinzufügen',
+        addReviewComment: 'Kommentar hinzufügen...',
+        noReviewComments: 'Noch keine Prüfungskommentare vorhanden.',
+        comments: 'Kommentare',
+
         clientReview: 'Kundenprüfung',
         currentStatus: 'Aktueller Status',
         sendForReview: 'Zur Prüfung senden',
+        sentForReview: 'Zur Prüfung gesendet',
         accept: 'Akzeptieren',
         requestChanges: 'Änderungen anfordern',
         reject: 'Ablehnen',
@@ -139,5 +169,13 @@ export const translations = {
         accepted: 'Akzeptiert',
         rejected: 'Abgelehnt',
         current: 'Aktuell',
+
+        copyLink: 'Link kopieren',
+        copied: 'Kopiert',
+
+        clientReviewMode: 'Kundenprüfungsmodus',
+        sharedReviewReadonly: 'Dieses Dokument wurde über einen geteilten Prüfungslink geöffnet und ist schreibgeschützt.',
+        shareReviewLink: 'Prüfungslink teilen',
+        generateReviewLink: 'Prüfungslink erstellen',
     },
 }

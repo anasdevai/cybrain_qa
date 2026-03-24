@@ -1,9 +1,3 @@
-/**
- * ReviewActions.jsx
- * 
- * Renders a sidebar panel containing action buttons and comments
- * to manage the document's review workflow per version.
- */
 import { useState } from 'react'
 import { useLanguage } from '../../context/LanguageContext'
 
@@ -21,6 +15,21 @@ export default function ReviewActions({
     const { t } = useLanguage()
     const [commentText, setCommentText] = useState('')
 
+    const statusLabelMap = {
+        Draft: t.draft,
+        'Under Review': t.underReview,
+        'Changes Requested': t.changesRequested,
+        Accepted: t.accepted,
+        Rejected: t.rejected,
+        draft: t.draft,
+        under_review: t.underReview,
+        changes_requested: t.changesRequested,
+        accepted: t.accepted,
+        rejected: t.rejected,
+    }
+
+    const displayStatus = statusLabelMap[workflowStatus] || workflowStatus
+
     const handleAddComment = () => {
         if (!commentText.trim()) return
         onAddComment?.(commentText.trim())
@@ -32,12 +41,12 @@ export default function ReviewActions({
             <h3>{t.clientReview}</h3>
 
             <p className="muted-text">
-                {t.currentStatus}: {workflowStatus}
+                {t.currentStatus}: {displayStatus}
             </p>
 
             {sentForReviewAt ? (
                 <p className="muted-text">
-                    Sent for review: {new Date(sentForReviewAt).toLocaleString()}
+                    {t.sentForReview}: {new Date(sentForReviewAt).toLocaleString()}
                 </p>
             ) : null}
 
@@ -78,12 +87,12 @@ export default function ReviewActions({
             </div>
 
             <div className="review-comments-section">
-                <h4>Comments</h4>
+                <h4>{t.comments}</h4>
 
                 <textarea
                     value={commentText}
                     onChange={(e) => setCommentText(e.target.value)}
-                    placeholder="Add review comment..."
+                    placeholder={t.addReviewComment}
                     rows={4}
                 />
 
@@ -92,12 +101,12 @@ export default function ReviewActions({
                     onClick={handleAddComment}
                     className="primary-btn"
                 >
-                    Add Comment
+                    {t.addComment}
                 </button>
 
                 <div className="review-comments-list">
                     {reviewComments.length === 0 ? (
-                        <p className="muted-text">No review comments yet.</p>
+                        <p className="muted-text">{t.noReviewComments}</p>
                     ) : (
                         reviewComments.map((comment, index) => (
                             <div

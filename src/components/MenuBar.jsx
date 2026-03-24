@@ -6,19 +6,19 @@
  * exporting, comparing versions, and inserting tables/placeholders.
  */
 
-import React, { useRef, useState } from 'react';
-import { useEditorState } from '@tiptap/react';
-import { menuBarStateSelector } from './menuBarState';
-import { useLanguage } from '../context/LanguageContext';
+import React, { useRef, useState } from 'react'
+import { useEditorState } from '@tiptap/react'
+import { menuBarStateSelector } from './menuBarState'
+import { useLanguage } from '../context/LanguageContext'
 
 // Utility to determine OS for keyboard shortcuts
 const isMac =
-    typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform);
+    typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform)
 
-const modKey = isMac ? 'Cmd' : 'Ctrl';
-const shortcut = (key) => `${modKey} + ${key}`;
-const shortcutShift = (key) => `${modKey} + Shift + ${key}`;
-const shortcutAlt = (key) => `${modKey} + Alt + ${key}`;
+const modKey = isMac ? 'Cmd' : 'Ctrl'
+const shortcut = (key) => `${modKey} + ${key}`
+const shortcutShift = (key) => `${modKey} + Shift + ${key}`
+const shortcutAlt = (key) => `${modKey} + Alt + ${key}`
 
 export const MenuBar = ({
     editor,
@@ -37,49 +37,66 @@ export const MenuBar = ({
     onOCRUpload,
     isOcrLoading,
     ocrError,
+    isReadOnly = false,
 }) => {
-    const fileInputRef = useRef(null);
-    const { t } = useLanguage();
-    const [selectedPlaceholder, setSelectedPlaceholder] = useState('');
+    const fileInputRef = useRef(null)
+    const { t } = useLanguage()
+    const [selectedPlaceholder, setSelectedPlaceholder] = useState('')
 
     const handleOCRButtonClick = () => {
-        fileInputRef.current?.click();
-    };
+        if (isReadOnly) return
+        fileInputRef.current?.click()
+    }
 
     const handleFileChange = async (event) => {
-        const file = event.target.files?.[0];
-        if (!file) return;
+        if (isReadOnly) {
+            event.target.value = ''
+            return
+        }
 
-        await onOCRUpload?.(file);
-        event.target.value = '';
-    };
+        const file = event.target.files?.[0]
+        if (!file) return
+
+        await onOCRUpload?.(file)
+        event.target.value = ''
+    }
 
     const editorState = useEditorState({
         editor,
         selector: menuBarStateSelector,
-    });
+    })
 
-    if (!editor) return null;
+    if (!editor) return null
 
-    const isInTable = editor.isActive('table');
+    const isInTable = editor.isActive('table')
+
+    const runIfEditable = (callback) => {
+        if (isReadOnly) return
+        callback?.()
+    }
+
+    const disabledIfReadOnly = (extraCondition = false) =>
+        isReadOnly || extraCondition
 
     return (
         <div className="control-group">
             <div className="button-group">
                 <button
                     type="button"
-                    onClick={onSave}
+                    onClick={() => runIfEditable(onSave)}
                     title={`${t.save} (${shortcut('S')})`}
                     className="save-btn"
+                    disabled={isReadOnly}
                 >
                     {t.save}
                 </button>
 
                 <button
                     type="button"
-                    onClick={onNewVersion}
+                    onClick={() => runIfEditable(onNewVersion)}
                     title={`${t.newVersion} (${shortcutShift('V')})`}
                     className="version-btn"
+                    disabled={isReadOnly}
                 >
                     {t.newVersion}
                 </button>
@@ -108,8 +125,10 @@ export const MenuBar = ({
                 <button
                     type="button"
                     title={`${t.bold} (${shortcut('B')})`}
-                    onClick={() => editor.chain().focus().toggleBold().run()}
-                    disabled={!editorState.canBold}
+                    onClick={() =>
+                        runIfEditable(() => editor.chain().focus().toggleBold().run())
+                    }
+                    disabled={disabledIfReadOnly(!editorState.canBold)}
                     className={editorState.isBold ? 'is-active' : ''}
                 >
                     {t.bold}
@@ -118,8 +137,10 @@ export const MenuBar = ({
                 <button
                     type="button"
                     title={`${t.italic} (${shortcut('I')})`}
-                    onClick={() => editor.chain().focus().toggleItalic().run()}
-                    disabled={!editorState.canItalic}
+                    onClick={() =>
+                        runIfEditable(() => editor.chain().focus().toggleItalic().run())
+                    }
+                    disabled={disabledIfReadOnly(!editorState.canItalic)}
                     className={editorState.isItalic ? 'is-active' : ''}
                 >
                     {t.italic}
@@ -128,7 +149,10 @@ export const MenuBar = ({
                 <button
                     type="button"
                     title={`${t.underline} (${shortcut('U')})`}
-                    onClick={() => editor.chain().focus().toggleUnderline().run()}
+                    onClick={() =>
+                        runIfEditable(() => editor.chain().focus().toggleUnderline().run())
+                    }
+                    disabled={disabledIfReadOnly(false)}
                     className={editorState.isUnderline ? 'is-active' : ''}
                 >
                     {t.underline}
@@ -137,8 +161,10 @@ export const MenuBar = ({
                 <button
                     type="button"
                     title={`${t.strike} (${shortcutShift('X')})`}
-                    onClick={() => editor.chain().focus().toggleStrike().run()}
-                    disabled={!editorState.canStrike}
+                    onClick={() =>
+                        runIfEditable(() => editor.chain().focus().toggleStrike().run())
+                    }
+                    disabled={disabledIfReadOnly(!editorState.canStrike)}
                     className={editorState.isStrike ? 'is-active' : ''}
                 >
                     {t.strike}
@@ -147,7 +173,12 @@ export const MenuBar = ({
                 <button
                     type="button"
                     title={`${t.heading1} (Alt + 1)`}
-                    onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()}
+                    onClick={() =>
+                        runIfEditable(() =>
+                            editor.chain().focus().toggleHeading({ level: 1 }).run()
+                        )
+                    }
+                    disabled={disabledIfReadOnly(false)}
                     className={editorState.isHeading1 ? 'is-active' : ''}
                 >
                     {t.heading1}
@@ -156,7 +187,12 @@ export const MenuBar = ({
                 <button
                     type="button"
                     title={`${t.heading2} (Alt + 2)`}
-                    onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
+                    onClick={() =>
+                        runIfEditable(() =>
+                            editor.chain().focus().toggleHeading({ level: 2 }).run()
+                        )
+                    }
+                    disabled={disabledIfReadOnly(false)}
                     className={editorState.isHeading2 ? 'is-active' : ''}
                 >
                     {t.heading2}
@@ -165,7 +201,12 @@ export const MenuBar = ({
                 <button
                     type="button"
                     title={`${t.heading3} (Alt + 3)`}
-                    onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()}
+                    onClick={() =>
+                        runIfEditable(() =>
+                            editor.chain().focus().toggleHeading({ level: 3 }).run()
+                        )
+                    }
+                    disabled={disabledIfReadOnly(false)}
                     className={editorState.isHeading3 ? 'is-active' : ''}
                 >
                     {t.heading3}
@@ -174,7 +215,10 @@ export const MenuBar = ({
                 <button
                     type="button"
                     title={`${t.bulletList} (${shortcutShift('L')})`}
-                    onClick={() => editor.chain().focus().toggleBulletList().run()}
+                    onClick={() =>
+                        runIfEditable(() => editor.chain().focus().toggleBulletList().run())
+                    }
+                    disabled={disabledIfReadOnly(false)}
                     className={editorState.isBulletList ? 'is-active' : ''}
                 >
                     {t.bulletList}
@@ -183,7 +227,12 @@ export const MenuBar = ({
                 <button
                     type="button"
                     title={`${t.numberedList} (${shortcutShift('7')})`}
-                    onClick={() => editor.chain().focus().toggleOrderedList().run()}
+                    onClick={() =>
+                        runIfEditable(() =>
+                            editor.chain().focus().toggleOrderedList().run()
+                        )
+                    }
+                    disabled={disabledIfReadOnly(false)}
                     className={editorState.isOrderedList ? 'is-active' : ''}
                 >
                     {t.numberedList}
@@ -192,8 +241,10 @@ export const MenuBar = ({
                 <button
                     type="button"
                     title={`${t.undo} (${shortcut('Z')})`}
-                    onClick={() => editor.chain().focus().undo().run()}
-                    disabled={!editorState.canUndo}
+                    onClick={() =>
+                        runIfEditable(() => editor.chain().focus().undo().run())
+                    }
+                    disabled={disabledIfReadOnly(!editorState.canUndo)}
                 >
                     {t.undo}
                 </button>
@@ -201,8 +252,10 @@ export const MenuBar = ({
                 <button
                     type="button"
                     title={`${t.redo} (${shortcutShift('Z')})`}
-                    onClick={() => editor.chain().focus().redo().run()}
-                    disabled={!editorState.canRedo}
+                    onClick={() =>
+                        runIfEditable(() => editor.chain().focus().redo().run())
+                    }
+                    disabled={disabledIfReadOnly(!editorState.canRedo)}
                 >
                     {t.redo}
                 </button>
@@ -210,7 +263,8 @@ export const MenuBar = ({
                 <button
                     type="button"
                     title={`${t.insertUrl} (${shortcut('K')})`}
-                    onClick={onOpenLinkModal}
+                    onClick={() => runIfEditable(onOpenLinkModal)}
+                    disabled={isReadOnly}
                 >
                     {t.insertUrl}
                 </button>
@@ -219,20 +273,23 @@ export const MenuBar = ({
                     <select
                         className="version-select"
                         value={selectedPlaceholder}
+                        disabled={isReadOnly}
                         onChange={(e) => {
-                            const value = e.target.value;
-                            setSelectedPlaceholder(value);
+                            if (isReadOnly) return
 
-                            if (!value) return;
+                            const value = e.target.value
+                            setSelectedPlaceholder(value)
+
+                            if (!value) return
 
                             if (value === '__custom__') {
-                                const customName = window.prompt(t.custom);
+                                const customName = window.prompt(t.custom)
                                 if (customName?.trim()) {
-                                    onInsertPlaceholder?.(customName.trim());
-                                    setSelectedPlaceholder(customName.trim());
+                                    onInsertPlaceholder?.(customName.trim())
+                                    setSelectedPlaceholder(customName.trim())
                                 }
                             } else {
-                                onInsertPlaceholder?.(value);
+                                onInsertPlaceholder?.(value)
                             }
                         }}
                     >
@@ -277,9 +334,9 @@ export const MenuBar = ({
                         className="compare-btn"
                         title={t.compare}
                         onClick={() => {
-                            const v1 = document.getElementById('compareV1').value;
-                            const v2 = document.getElementById('compareV2').value;
-                            onCompare(v1, v2);
+                            const v1 = document.getElementById('compareV1').value
+                            const v2 = document.getElementById('compareV2').value
+                            onCompare(v1, v2)
                         }}
                     >
                         {t.compare}
@@ -290,8 +347,15 @@ export const MenuBar = ({
                     type="button"
                     title={t.insertTable}
                     onClick={() =>
-                        editor.chain().focus().insertTable({ rows: 4, cols: 4, withHeaderRow: true }).run()
+                        runIfEditable(() =>
+                            editor
+                                .chain()
+                                .focus()
+                                .insertTable({ rows: 4, cols: 4, withHeaderRow: true })
+                                .run()
+                        )
                     }
+                    disabled={isReadOnly}
                 >
                     {t.insertTable}
                 </button>
@@ -299,7 +363,7 @@ export const MenuBar = ({
                 <button
                     type="button"
                     onClick={handleOCRButtonClick}
-                    disabled={isOcrLoading}
+                    disabled={isReadOnly || isOcrLoading}
                     title="Import OCR text from PDF or DOCX"
                 >
                     {isOcrLoading ? 'Extracting...' : 'Import PDF/DOCX'}
@@ -318,7 +382,12 @@ export const MenuBar = ({
                         <button
                             type="button"
                             title={t.addColBefore}
-                            onClick={() => editor.chain().focus().addColumnBefore().run()}
+                            onClick={() =>
+                                runIfEditable(() =>
+                                    editor.chain().focus().addColumnBefore().run()
+                                )
+                            }
+                            disabled={isReadOnly}
                         >
                             {t.addColBefore}
                         </button>
@@ -326,7 +395,12 @@ export const MenuBar = ({
                         <button
                             type="button"
                             title={t.addColAfter}
-                            onClick={() => editor.chain().focus().addColumnAfter().run()}
+                            onClick={() =>
+                                runIfEditable(() =>
+                                    editor.chain().focus().addColumnAfter().run()
+                                )
+                            }
+                            disabled={isReadOnly}
                         >
                             {t.addColAfter}
                         </button>
@@ -334,7 +408,12 @@ export const MenuBar = ({
                         <button
                             type="button"
                             title={t.deleteColumn}
-                            onClick={() => editor.chain().focus().deleteColumn().run()}
+                            onClick={() =>
+                                runIfEditable(() =>
+                                    editor.chain().focus().deleteColumn().run()
+                                )
+                            }
+                            disabled={isReadOnly}
                         >
                             {t.deleteColumn}
                         </button>
@@ -342,7 +421,10 @@ export const MenuBar = ({
                         <button
                             type="button"
                             title={t.addRowBefore}
-                            onClick={() => editor.chain().focus().addRowBefore().run()}
+                            onClick={() =>
+                                runIfEditable(() => editor.chain().focus().addRowBefore().run())
+                            }
+                            disabled={isReadOnly}
                         >
                             {t.addRowBefore}
                         </button>
@@ -350,7 +432,10 @@ export const MenuBar = ({
                         <button
                             type="button"
                             title={t.addRowAfter}
-                            onClick={() => editor.chain().focus().addRowAfter().run()}
+                            onClick={() =>
+                                runIfEditable(() => editor.chain().focus().addRowAfter().run())
+                            }
+                            disabled={isReadOnly}
                         >
                             {t.addRowAfter}
                         </button>
@@ -358,7 +443,10 @@ export const MenuBar = ({
                         <button
                             type="button"
                             title={t.deleteRow}
-                            onClick={() => editor.chain().focus().deleteRow().run()}
+                            onClick={() =>
+                                runIfEditable(() => editor.chain().focus().deleteRow().run())
+                            }
+                            disabled={isReadOnly}
                         >
                             {t.deleteRow}
                         </button>
@@ -366,7 +454,10 @@ export const MenuBar = ({
                         <button
                             type="button"
                             title={t.deleteTable}
-                            onClick={() => editor.chain().focus().deleteTable().run()}
+                            onClick={() =>
+                                runIfEditable(() => editor.chain().focus().deleteTable().run())
+                            }
+                            disabled={isReadOnly}
                         >
                             {t.deleteTable}
                         </button>
@@ -374,7 +465,7 @@ export const MenuBar = ({
                 )}
             </div>
         </div>
-    );
-};
+    )
+}
 
-export default MenuBar;
+export default MenuBar
