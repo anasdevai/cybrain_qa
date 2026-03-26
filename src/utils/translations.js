@@ -90,6 +90,76 @@ export const translations = {
         sharedReviewReadonly: 'This document is opened through a shared review link and is read-only.',
         shareReviewLink: 'Share Review Link',
         generateReviewLink: 'Generate Review Link',
+
+        sopMetadata: 'SOP Metadata',
+        documentId: 'Document ID',
+        department: 'Department',
+        author: 'Author',
+        reviewer: 'Reviewer',
+        effectiveDate: 'Effective Date',
+        reviewDate: 'Review Date',
+        riskLevel: 'Risk Level',
+
+
+        sopAuditTrail: 'SOP Audit Trail',
+        noAuditEntries: 'No audit entries yet.',
+        from: 'From',
+        to: 'To',
+        author: 'Author',
+        systemActor: 'System',
+        newRevisionCreated: 'New Revision Created',
+        effective: 'Effective',
+        obsolete: 'Obsolete',
+
+
+        sopReferences: 'SOP References',
+        addReference: 'Add reference / citation',
+        add: 'Add',
+        remove: 'Remove',
+        noReferencesYet: 'No references added yet.',
+
+        sopActions: 'SOP Actions',
+        approve: 'Approve',
+        submitForReview: 'Submit for Review',
+        sendBackToDraft: 'Send Back to Draft',
+        markObsolete: 'Mark Obsolete',
+        readOnlyModeEnabled: 'Read-only mode enabled.',
+        sopNotePlaceholder: 'Add change summary / approval note / obsolete reason...',
+        noteRequired: 'This action requires a note.',
+
+        sopLifecycle: 'SOP Lifecycle',
+        effective: 'Effective',
+        obsolete: 'Obsolete',
+
+        sopAuditTrail: 'SOP Audit Trail',
+        noAuditEntries: 'No audit entries yet.',
+        from: 'From',
+        to: 'To',
+        author: 'Author',
+        system: 'System',
+        createdNewRevision: 'Created new revision',
+
+        // PreviewModal
+        printPreviewExport: 'Print Preview & Export',
+        orientation: 'Orientation:',
+        portrait: 'Portrait',
+        landscape: 'Landscape',
+        zoom: 'Zoom:',
+        print: 'Print',
+        exportWord: 'Export Word',
+        exportPdf: 'Export PDF',
+
+        // LinkModal
+        insertLink: 'Insert Link',
+        addressLabel: 'Address:',
+        linkPlaceholder: 'https://example.com',
+        cancel: 'Cancel',
+        ok: 'OK',
+
+        // MenuBar OCR
+        extracting: 'Extracting...',
+        importPdfDocx: 'Import PDF/DOCX',
+        importOcrTooltip: 'Import OCR text from PDF or DOCX',
     },
 
     de: {
@@ -177,5 +247,82 @@ export const translations = {
         sharedReviewReadonly: 'Dieses Dokument wurde über einen geteilten Prüfungslink geöffnet und ist schreibgeschützt.',
         shareReviewLink: 'Prüfungslink teilen',
         generateReviewLink: 'Prüfungslink erstellen',
+
+
+        sopMetadata: 'SOP-Metadaten',
+        documentId: 'Dokument-ID',
+        department: 'Abteilung',
+        author: 'Autor',
+        reviewer: 'Prüfer',
+        effectiveDate: 'Gültig ab',
+        reviewDate: 'Prüfdatum',
+        riskLevel: 'Risikostufe',
+
+
+
+        sopAuditTrail: 'SOP-Prüfprotokoll',
+        noAuditEntries: 'Noch keine Protokolleinträge vorhanden.',
+        from: 'Von',
+        to: 'Zu',
+        author: 'Autor',
+        systemActor: 'System',
+        newRevisionCreated: 'Neue Revision erstellt',
+        effective: 'Gültig',
+        obsolete: 'Veraltet',
+
+
+
+
+
+
+
+        sopReferences: 'SOP-Referenzen',
+        addReference: 'Referenz / Zitat hinzufügen',
+        add: 'Hinzufügen',
+        remove: 'Entfernen',
+        noReferencesYet: 'Noch keine Referenzen hinzugefügt.',
+
+        sopActions: 'SOP-Aktionen',
+        approve: 'Genehmigen',
+        submitForReview: 'Zur Prüfung senden',
+        sendBackToDraft: 'Zu Entwurf zurücksenden',
+        markObsolete: 'Als veraltet markieren',
+        readOnlyModeEnabled: 'Schreibgeschützter Modus aktiviert.',
+        sopNotePlaceholder: 'Änderungszusammenfassung / Genehmigungsnotiz / Grund für Veraltung hinzufügen...',
+        noteRequired: 'Für diese Aktion ist eine Notiz erforderlich.',
+
+        sopLifecycle: 'SOP-Lebenszyklus',
+        effective: 'Gültig',
+        obsolete: 'Veraltet',
+
+        sopAuditTrail: 'SOP-Prüfprotokoll',
+        noAuditEntries: 'Noch keine Protokolleinträge vorhanden.',
+        from: 'Von',
+        to: 'Zu',
+        author: 'Autor',
+        system: 'System',
+        createdNewRevision: 'Neue Version erstellt',
+
+        // PreviewModal
+        printPreviewExport: 'Druckvorschau & Export',
+        orientation: 'Ausrichtung:',
+        portrait: 'Hochformat',
+        landscape: 'Querformat',
+        zoom: 'Zoom:',
+        print: 'Drucken',
+        exportWord: 'Nach Word exportieren',
+        exportPdf: 'Nach PDF exportieren',
+
+        // LinkModal
+        insertLink: 'Link einfügen',
+        addressLabel: 'Adresse:',
+        linkPlaceholder: 'https://beispiel.de',
+        cancel: 'Abbrechen',
+        ok: 'OK',
+
+        // MenuBar OCR
+        extracting: 'Extrahieren...',
+        importPdfDocx: 'PDF/DOCX importieren',
+        importOcrTooltip: 'OCR-Text aus PDF oder DOCX importieren',
     },
 }

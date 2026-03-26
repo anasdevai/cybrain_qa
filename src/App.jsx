@@ -18,6 +18,14 @@ import {
 } from './utils/sopConstants'
 import { transitionSOP, canEditSOP } from './utils/sopStateMachine'
 
+
+import {
+  canSubmitSOPForReview,
+  canApproveSOP,
+  canMarkSOPObsolete,
+} from './utils/sopValidation'
+
+
 import { useEditor, EditorContent } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import UniqueID from '@tiptap/extension-unique-id'
@@ -97,7 +105,7 @@ const App = () => {
 
   const [isOcrLoading, setIsOcrLoading] = useState(false)
   const [ocrError, setOcrError] = useState('')
-
+  const [sopFieldErrors, setSOPFieldErrors] = useState({})
   const [isClientReviewMode, setIsClientReviewMode] = useState(false)
   const [reviewLink, setReviewLink] = useState('')
   const [reviewToken, setReviewToken] = useState(null)
@@ -143,6 +151,8 @@ const App = () => {
     !isClientReviewMode &&
     (isContractProfile || canEditSOP(currentSOPStatus))
 
+  const canCreateNewVersion = !isClientReviewMode
+
   const handleProfileChange = useCallback((value) => {
     setProfile(value?.toLowerCase() || 'contract')
   }, [])
@@ -173,6 +183,18 @@ const App = () => {
     (nextMetadata) => {
       updateCurrentVersionMetadata({
         sopMetadata: nextMetadata,
+      })
+
+      setSOPFieldErrors((prev) => {
+        if (!prev || Object.keys(prev).length === 0) return prev
+
+        const nextErrors = { ...prev }
+
+        if (nextMetadata?.documentId?.trim()) delete nextErrors.documentId
+        if (nextMetadata?.author?.trim()) delete nextErrors.author
+        if (nextMetadata?.reviewer?.trim()) delete nextErrors.reviewer
+
+        return nextErrors
       })
     },
     [updateCurrentVersionMetadata]
@@ -313,7 +335,7 @@ const App = () => {
         const mod = e.ctrlKey || e.metaKey
         const key = e.key.toLowerCase()
 
-        if (!isEditorEditable) return true
+        if (!isEditorEditable) return false
 
         if (mod && e.altKey && key === 'p') {
           e.preventDefault()
@@ -404,6 +426,7 @@ const App = () => {
       setVariables(matchedVersion.metadata?.variables || {})
       setIsClientReviewMode(true)
       setReviewToken(tokenFromUrl)
+      setSOPFieldErrors({})
       setReviewLink(
         buildReviewLink({
           token: tokenFromUrl,
@@ -451,32 +474,72 @@ const App = () => {
   )
 
   const submitSOPForReview = useCallback(
-    (note = '') => {
+    async (note = '') => {
+      const result = canSubmitSOPForReview({
+        metadata: currentSOPMetadata,
+        note,
+      })
+
+      setSOPFieldErrors(result.fieldErrors || {})
+
+      if (!result.ok) return result
+
       updateSOPState(
         SOP_STATES.UNDER_REVIEW,
         note || 'Submitted for review'
       )
-    },
-    [updateSOPState]
-  )
 
+      setSOPFieldErrors({})
+      return { ok: true }
+    },
+    [currentSOPMetadata, updateSOPState]
+  )
   const approveSOP = useCallback(
-    (note = '') => {
-      updateSOPState(SOP_STATES.EFFECTIVE, note || 'Approved')
-    },
-    [updateSOPState]
-  )
+    async (note = '') => {
+      const result = canApproveSOP({
+        metadata: currentSOPMetadata,
+        references: currentSOPMetadata?.references || [],
+      })
 
+      setSOPFieldErrors(result.fieldErrors || {})
+
+      if (!result.ok) return result
+
+      updateSOPState(
+        SOP_STATES.EFFECTIVE,
+        note || 'Approved'
+      )
+
+      setSOPFieldErrors({})
+      return { ok: true }
+    },
+    [currentSOPMetadata, updateSOPState]
+  )
   const sendSOPBackToDraft = useCallback(
-    (note = '') => {
-      updateSOPState(SOP_STATES.DRAFT, note || 'Sent back to draft')
+    async (note = '') => {
+      updateSOPState(
+        SOP_STATES.DRAFT,
+        note || 'Sent back to draft'
+      )
+
+      setSOPFieldErrors({})
+      return { ok: true }
     },
     [updateSOPState]
   )
-
   const markSOPObsolete = useCallback(
-    (note = '') => {
-      updateSOPState(SOP_STATES.OBSOLETE, note || 'Marked obsolete')
+    async (note = '') => {
+      const result = canMarkSOPObsolete({ note })
+
+      if (!result.ok) return result
+
+      updateSOPState(
+        SOP_STATES.OBSOLETE,
+        note || 'Marked obsolete'
+      )
+
+      setSOPFieldErrors({})
+      return { ok: true }
     },
     [updateSOPState]
   )
@@ -549,44 +612,71 @@ const App = () => {
   }, [editor, currentVersionId, debouncedSave, variables, isEditorEditable])
 
   const createNewVersion = useCallback(() => {
-    if (!editor || !isEditorEditable) return
+    if (!editor || !canCreateNewVersion) return
 
-    setVersions((prev) => {
-      const versionNumber = prev.length + 1
-      const newId = `v${versionNumber}`
-      const json = editor.getJSON()
+    const versionNumber = versions.length + 1
+    const newId = `v${versionNumber}`
+    const json = editor.getJSON()
+    const isCreatingFromSOP = isSOPProfile
 
-      const newVersion = {
-        id: newId,
-        json,
-        timestamp: formatTimestamp(new Date()),
-        isFormatted: true,
-        metadata: {
-          variables,
-          reviewStatus: WORKFLOW_STATES.DRAFT,
-          sentForReviewAt: null,
-          reviewComments: [],
-          reviewToken: null,
-          sopStatus: currentVersion?.metadata?.sopStatus || SOP_STATES.DRAFT,
-          sopMetadata:
-            currentVersion?.metadata?.sopMetadata ||
-            DEFAULT_SOP_VERSION_METADATA.sopMetadata,
-          auditTrail: currentVersion?.metadata?.auditTrail || [],
-          versionNote: currentVersion?.metadata?.versionNote || '',
-          approvedBy: currentVersion?.metadata?.approvedBy || '',
-          obsoleteReason: currentVersion?.metadata?.obsoleteReason || '',
-        },
-      }
+    const newVersion = {
+      id: newId,
+      json,
+      timestamp: formatTimestamp(new Date()),
+      isFormatted: true,
+      metadata: {
+        variables,
+        reviewStatus: WORKFLOW_STATES.DRAFT,
+        sentForReviewAt: null,
+        reviewComments: [],
+        reviewToken: null,
 
-      const updated = [...prev, newVersion]
-      saveToStorage(updated)
-      setCurrentVersionId(newId)
-      setReviewLink('')
-      setReviewToken(null)
-      return updated
-    })
-  }, [editor, variables, currentVersion, isEditorEditable])
+        ...(isCreatingFromSOP
+          ? {
+            sopStatus: SOP_STATES.DRAFT,
+            sopMetadata:
+              currentVersion?.metadata?.sopMetadata ||
+              DEFAULT_SOP_VERSION_METADATA.sopMetadata,
+            auditTrail: [
+              {
+                id: `audit_${Date.now()}`,
+                action: 'created_new_revision',
+                fromStatus: currentVersion?.metadata?.sopStatus || null,
+                toStatus: SOP_STATES.DRAFT,
+                note: `Created from ${currentVersion?.id} as a new draft revision`,
+                actor: 'Author',
+                createdAt: new Date().toISOString(),
+              },
+            ],
+            versionNote: '',
+            approvedBy: '',
+            obsoleteReason: '',
+          }
+          : {
+            sopStatus:
+              currentVersion?.metadata?.sopStatus || SOP_STATES.DRAFT,
+            sopMetadata:
+              currentVersion?.metadata?.sopMetadata ||
+              DEFAULT_SOP_VERSION_METADATA.sopMetadata,
+            auditTrail: currentVersion?.metadata?.auditTrail || [],
+            versionNote: currentVersion?.metadata?.versionNote || '',
+            approvedBy: currentVersion?.metadata?.approvedBy || '',
+            obsoleteReason:
+              currentVersion?.metadata?.obsoleteReason || '',
+          }),
+      },
+    }
 
+    const updated = [...versions, newVersion]
+    saveToStorage(updated)
+    setVersions(updated)
+    setCurrentVersionId(newId)
+    setReviewLink('')
+    setReviewToken(null)
+    setSOPFieldErrors({})
+
+    editor.commands.setContent(json, false)
+  }, [editor, versions, variables, currentVersion, canCreateNewVersion, isSOPProfile])
   useEffect(() => {
     if (!editor) return
 
@@ -619,7 +709,7 @@ const App = () => {
         setCurrentVersionId(versionId)
         setVariables(version.metadata?.variables || {})
         setReviewToken(version.metadata?.reviewToken || null)
-
+        setSOPFieldErrors({})
         if (version.metadata?.reviewToken) {
           setReviewLink(
             buildReviewLink({
@@ -762,6 +852,7 @@ const App = () => {
     openVersionInClientReviewMode(tokenFromUrl, versionIdFromUrl)
   }, [editor, versions, openVersionInClientReviewMode])
 
+
   useEffect(() => {
     if (!editor) return
 
@@ -849,11 +940,13 @@ const App = () => {
       if (!editor) return
 
       if (!isEditorEditable) {
-        if (
-          (mod && key === 's') ||
-          (mod && key === 'p') ||
-          (mod && e.shiftKey && key === 'v')
-        ) {
+        if (mod && e.shiftKey && !e.altKey && key === 'v' && canCreateNewVersion) {
+          e.preventDefault()
+          createNewVersion()
+          return
+        }
+
+        if ((mod && key === 's') || (mod && key === 'p')) {
           e.preventDefault()
         }
         return
@@ -877,7 +970,7 @@ const App = () => {
 
     window.addEventListener('keydown', handleGlobalKeyDown)
     return () => window.removeEventListener('keydown', handleGlobalKeyDown)
-  }, [editor, variables, manualSave, createNewVersion, isEditorEditable])
+  }, [editor, variables, manualSave, createNewVersion, isEditorEditable, canCreateNewVersion])
 
   if (!editor) return <div className="loading">Loading AI-LAW Editor...</div>
 
@@ -941,13 +1034,14 @@ const App = () => {
           isOcrLoading={isOcrLoading}
           ocrError={ocrError}
           isReadOnly={!isEditorEditable}
+          canCreateNewVersion={canCreateNewVersion}
         />
       )}
 
       <div
         className={`editor-layout ${(isContractProfile && showVariablesPanel) || isSOPProfile
-            ? 'with-right-panel'
-            : ''
+          ? 'with-right-panel'
+          : ''
           }`}
       >
         <div className="center-editor">
@@ -994,6 +1088,7 @@ const App = () => {
               metadata={currentSOPMetadata}
               onChange={updateSOPMetadata}
               isReadOnly={!isEditorEditable}
+              errors={sopFieldErrors}
             />
 
             <SOPReferencesPanel

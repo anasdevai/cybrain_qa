@@ -51,6 +51,7 @@ export default function ReviewActions({
             ) : null}
 
             <div className="review-actions">
+                <div className="review-actions-buttons">
                 {!isClientReviewMode && (
                     <button
                         type="button"
@@ -84,6 +85,7 @@ export default function ReviewActions({
                 >
                     {t.reject}
                 </button>
+                </div>
             </div>
 
             <div className="review-comments-section">

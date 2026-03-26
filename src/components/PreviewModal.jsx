@@ -12,6 +12,8 @@ import jsPDF from 'jspdf';
 import { resolveTextWithVariables } from '../utils/resolveVariables';
 import { printDocument } from '../utils/printHelpers';
 
+import { useLanguage } from '../context/LanguageContext';
+
 /**
  * Preview and Export Modal Component.
  * @param {Object} props
@@ -29,6 +31,7 @@ const PreviewModal = ({
     contractVariables = {},
 }) => {
     const previewRef = useRef(null);
+    const { t } = useLanguage();
     const [scale, setScale] = useState(1);
     const [orientation, setOrientation] = useState('portrait');
 
@@ -351,7 +354,7 @@ const PreviewModal = ({
                 onClick={(e) => e.stopPropagation()}
             >
                 <div className="link-modal-header">
-                    <h3>Print Preview & Export</h3>
+                    <h3>{t.printPreviewExport}</h3>
                     <button
                         type="button"
                         className="close-btn"
@@ -363,18 +366,18 @@ const PreviewModal = ({
 
                 <div className="preview-toolbar">
                     <div className="toolbar-group">
-                        <label>Orientation:</label>
+                        <label>{t.orientation}</label>
                         <select
                             value={orientation}
                             onChange={(e) => setOrientation(e.target.value)}
                         >
-                            <option value="portrait">Portrait</option>
-                            <option value="landscape">Landscape</option>
+                            <option value="portrait">{t.portrait}</option>
+                            <option value="landscape">{t.landscape}</option>
                         </select>
                     </div>
 
                     <div className="toolbar-group">
-                        <label>Zoom:</label>
+                        <label>{t.zoom}</label>
                         <input
                             type="range"
                             min="0.5"
@@ -409,21 +412,21 @@ const PreviewModal = ({
                         className="cancel-btn"
                         onClick={handlePrint}
                     >
-                        Print
+                        {t.print}
                     </button>
                     <button
                         type="button"
                         className="ok-btn word-btn"
                         onClick={handleExportWord}
                     >
-                        Export Word
+                        {t.exportWord}
                     </button>
                     <button
                         type="button"
                         className="ok-btn"
                         onClick={handleExportPDF}
                     >
-                        Export PDF
+                        {t.exportPdf}
                     </button>
                 </div>
             </div>

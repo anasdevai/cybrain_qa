@@ -1,21 +1,11 @@
-import React from 'react';
-import { useLanguage } from '../context/LanguageContext';
+import React from 'react'
+import { useLanguage } from '../context/LanguageContext'
 
 /**
  * StatusBar Component
- * 
- * Displays live document statistics (word count, char count, block count),
- * global configuration selectors (active profile, language toggles),
- * and the save state indicator at the bottom of the editor.
- * 
- * @param {Object} props
- * @param {number} props.wordCount - Number of words in the active document.
- * @param {number} props.charCount - Number of characters in the active document.
- * @param {number} props.blockCount - Number of top-level blocks in the document.
- * @param {Date|null} props.lastSaved - Timestamp of the most recent save.
- * @param {boolean} props.isSaving - Whether a save operation is currently in progress.
- * @param {string} props.profile - The selected editing profile (e.g., "contract" or "sop").
- * @param {Function} props.onProfileChange - Callback triggered when profile selection changes.
+ *
+ * Displays live document statistics, profile/language selectors,
+ * and the current save state at the bottom of the editor.
  */
 const StatusBar = ({
     wordCount,
@@ -23,11 +13,32 @@ const StatusBar = ({
     blockCount = 0,
     lastSaved,
     isSaving,
-    profile = "contract",
+    profile = 'contract',
     onProfileChange,
+    workflowStatus = '',
 }) => {
-    // Utilize globalization context to translate UI strings
-    const { language, setLanguage, t } = useLanguage();
+    const { language, setLanguage, t } = useLanguage()
+
+    const statusLabelMap = {
+        draft: t.draft,
+        under_review: t.underReview,
+        changes_requested: t.changesRequested,
+        accepted: t.accepted,
+        rejected: t.rejected,
+        effective: t.effective || 'Effective',
+        obsolete: t.obsolete || 'Obsolete',
+
+        Draft: t.draft,
+        'Under Review': t.underReview,
+        'Changes Requested': t.changesRequested,
+        Accepted: t.accepted,
+        Rejected: t.rejected,
+        Effective: t.effective || 'Effective',
+        Obsolete: t.obsolete || 'Obsolete',
+    }
+
+    const displayWorkflowStatus =
+        statusLabelMap[workflowStatus] || workflowStatus || ''
 
     return (
         <div className="status-bar">
@@ -58,6 +69,12 @@ const StatusBar = ({
             </div>
 
             <div className="status-right">
+                {displayWorkflowStatus ? (
+                    <span className="workflow-status-chip">
+                        {displayWorkflowStatus}
+                    </span>
+                ) : null}
+
                 {isSaving ? (
                     <span className="saving-indicator">{t.saving}</span>
                 ) : (
@@ -67,7 +84,7 @@ const StatusBar = ({
                 )}
             </div>
         </div>
-    );
-};
+    )
+}
 
-export default StatusBar;
+export default StatusBar

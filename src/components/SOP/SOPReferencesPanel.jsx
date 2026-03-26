@@ -1,10 +1,12 @@
 import { useState } from 'react'
+import { useLanguage } from '../../context/LanguageContext'
 
 export default function SOPReferencesPanel({
     references = [],
     onChange,
     isReadOnly = false,
 }) {
+    const { t } = useLanguage()
     const [value, setValue] = useState('')
 
     const addReference = () => {
@@ -20,46 +22,42 @@ export default function SOPReferencesPanel({
     }
 
     return (
-        <div className="review-actions">
-            <h3>SOP References</h3>
+        <div className="contract-panel">
+            <h3>{t.sopReferences}</h3>
 
             {!isReadOnly && (
-                <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
+                <div className="review-link-box" style={{ flexDirection: 'row', alignItems: 'center' }}>
                     <input
                         type="text"
                         value={value}
                         onChange={(e) => setValue(e.target.value)}
-                        placeholder="Add reference / citation"
-                        style={{ flex: 1 }}
+                        placeholder={t.addReference}
+                        className="review-link-input"
                     />
                     <button type="button" className="primary-btn" onClick={addReference}>
-                        Add
+                        {t.add}
                     </button>
                 </div>
             )}
 
             {references.length === 0 ? (
-                <p className="muted-text">No references added yet.</p>
+                <p className="muted-text">{t.noReferencesYet}</p>
             ) : (
-                <div style={{ display: 'grid', gap: 8 }}>
+                <div className="review-comments-list">
                     {references.map((ref, index) => (
                         <div
                             key={`${ref}-${index}`}
-                            style={{
-                                border: '1px solid #d1d5db',
-                                borderRadius: 10,
-                                padding: '10px 12px',
-                            }}
+                            className="review-comment-item"
                         >
-                            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10 }}>
-                                <span>{ref}</span>
+                            <div className="variable-label-row">
+                                <span style={{ wordBreak: 'break-word', minWidth: 0 }}>{ref}</span>
                                 {!isReadOnly && (
                                     <button
                                         type="button"
                                         className="danger-btn"
                                         onClick={() => removeReference(index)}
                                     >
-                                        Remove
+                                        {t.remove}
                                     </button>
                                 )}
                             </div>

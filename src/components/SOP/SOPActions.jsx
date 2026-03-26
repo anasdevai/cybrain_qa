@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { useLanguage } from '../../context/LanguageContext'
 import {
     SOP_ACTIONS,
     SOP_LABELS,
@@ -13,6 +14,7 @@ export default function SOPActions({
     onMarkObsolete,
     isClientReviewMode = false,
 }) {
+    const { t } = useLanguage()
     const [note, setNote] = useState('')
     const [error, setError] = useState('')
 
@@ -21,63 +23,52 @@ export default function SOPActions({
         [sopStatus]
     )
 
-    const validateRequiredNote = (type, trimmed) => {
-        if (
-            (type === SOP_ACTIONS.SUBMIT_REVIEW || type === SOP_ACTIONS.MARK_OBSOLETE) &&
-            !trimmed
-        ) {
-            setError('This action requires a note.')
-            return false
-        }
+    const displayStatus = SOP_LABELS[sopStatus] || sopStatus
 
-        setError('')
-        return true
-    }
-
-    const runAction = (type) => {
+    const runAction = async (type) => {
         const trimmed = note.trim()
-
-        if (!validateRequiredNote(type, trimmed)) return
+        let result = { ok: true }
 
         if (type === SOP_ACTIONS.SUBMIT_REVIEW) {
-            onSubmitForReview?.(trimmed)
-            setNote('')
-            return
+            result = await onSubmitForReview?.(trimmed)
         }
 
         if (type === SOP_ACTIONS.APPROVE) {
-            onApprove?.(trimmed)
-            setNote('')
-            return
+            result = await onApprove?.(trimmed)
         }
 
         if (type === SOP_ACTIONS.SEND_BACK) {
-            onSendBackToDraft?.(trimmed)
-            setNote('')
-            return
+            result = await onSendBackToDraft?.(trimmed)
         }
 
         if (type === SOP_ACTIONS.MARK_OBSOLETE) {
-            onMarkObsolete?.(trimmed)
-            setNote('')
+            result = await onMarkObsolete?.(trimmed)
         }
+
+        if (result?.ok === false) {
+            setError(result.error || t.noteRequired)
+            return
+        }
+
+        setError('')
+        setNote('')
     }
 
     if (isClientReviewMode) {
         return (
-            <div className="review-actions">
-                <h3>SOP Actions</h3>
-                <p className="muted-text">Read-only mode enabled.</p>
+            <div className="contract-panel">
+                <h3>{t.sopActions}</h3>
+                <p className="muted-text">{t.readOnlyModeEnabled}</p>
             </div>
         )
     }
 
     return (
-        <div className="review-actions">
-            <h3>SOP Actions</h3>
+        <div className="contract-panel">
+            <h3>{t.sopActions}</h3>
 
             <p>
-                <strong>Current Status:</strong> {SOP_LABELS[sopStatus] || sopStatus}
+                <strong>{t.currentStatus}:</strong> {displayStatus}
             </p>
 
             <textarea
@@ -87,7 +78,7 @@ export default function SOPActions({
                     if (error) setError('')
                 }}
                 rows={4}
-                placeholder="Add change summary / approval note / obsolete reason..."
+                placeholder={t.sopNotePlaceholder}
                 className="review-comment-box"
             />
 
@@ -99,7 +90,6 @@ export default function SOPActions({
 
             <div
                 className="review-actions-buttons"
-                style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 10 }}
             >
                 {allowedActions.includes(SOP_ACTIONS.SUBMIT_REVIEW) && (
                     <button
@@ -107,7 +97,7 @@ export default function SOPActions({
                         className="primary-btn"
                         onClick={() => runAction(SOP_ACTIONS.SUBMIT_REVIEW)}
                     >
-                        Submit for Review
+                        {t.submitForReview}
                     </button>
                 )}
 
@@ -117,7 +107,7 @@ export default function SOPActions({
                         className="success-btn"
                         onClick={() => runAction(SOP_ACTIONS.APPROVE)}
                     >
-                        Approve
+                        {t.approve}
                     </button>
                 )}
 
@@ -127,7 +117,7 @@ export default function SOPActions({
                         className="warning-btn"
                         onClick={() => runAction(SOP_ACTIONS.SEND_BACK)}
                     >
-                        Send Back to Draft
+                        {t.sendBackToDraft}
                     </button>
                 )}
 
@@ -137,7 +127,7 @@ export default function SOPActions({
                         className="danger-btn"
                         onClick={() => runAction(SOP_ACTIONS.MARK_OBSOLETE)}
                     >
-                        Mark Obsolete
+                        {t.markObsolete}
                     </button>
                 )}
             </div>

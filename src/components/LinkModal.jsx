@@ -5,6 +5,7 @@
  * within the Tiptap editor. Handles focus management and basic URL validation.
  */
 import React, { useState, useEffect, useRef } from 'react';
+import { useLanguage } from '../context/LanguageContext';
 
 /**
  * Link insertion modal component.
@@ -16,6 +17,7 @@ import React, { useState, useEffect, useRef } from 'react';
  * @param {string} props.initialUrl - Pre-populated URL (e.g., if editing an existing link).
  */
 const LinkModal = ({ isOpen, onClose, onSave, initialUrl = '' }) => {
+    const { t } = useLanguage();
     const [url, setUrl] = useState(initialUrl);
     const inputRef = useRef(null);
 
@@ -42,25 +44,25 @@ const LinkModal = ({ isOpen, onClose, onSave, initialUrl = '' }) => {
         <div className="link-modal-overlay" onClick={onClose}>
             <div className="link-modal" onClick={(e) => e.stopPropagation()}>
                 <div className="link-modal-header">
-                    <h3>Insert Link</h3>
+                    <h3>{t.insertLink}</h3>
                     <button type="button" className="close-btn" onClick={onClose}>&times;</button>
                 </div>
                 <form onSubmit={handleSubmit} className="link-modal-body">
                     <div className="form-group">
-                        <label htmlFor="url-input">Address:</label>
+                        <label htmlFor="url-input">{t.addressLabel}</label>
                         <input
                             id="url-input"
                             ref={inputRef}
                             type="url"
-                            placeholder="https://example.com"
+                            placeholder={t.linkPlaceholder}
                             value={url}
                             onChange={(e) => setUrl(e.target.value)}
                             required
                         />
                     </div>
                     <div className="link-modal-footer">
-                        <button type="button" className="cancel-btn" onClick={onClose}>Cancel</button>
-                        <button type="submit" className="ok-btn">OK</button>
+                        <button type="button" className="cancel-btn" onClick={onClose}>{t.cancel}</button>
+                        <button type="submit" className="ok-btn">{t.ok}</button>
                     </div>
                 </form>
             </div>

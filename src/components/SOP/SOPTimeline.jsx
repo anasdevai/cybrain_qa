@@ -1,13 +1,23 @@
-import { SOP_LABELS, SOP_ORDER } from '../../utils/sopConstants'
+import { useLanguage } from '../../context/LanguageContext'
+import { SOP_ORDER } from '../../utils/sopConstants'
 
 export default function SOPTimeline({ sopStatus }) {
+    const { t } = useLanguage()
+
+    const labelMap = {
+        draft: t.draft,
+        under_review: t.underReview,
+        effective: t.effective,
+        obsolete: t.obsolete,
+    }
+
     const currentIndex = SOP_ORDER.indexOf(sopStatus)
 
     return (
-        <div className="workflow-timeline">
-            <h3>SOP Lifecycle</h3>
+        <div className="contract-panel">
+            <h3>{t.sopLifecycle}</h3>
 
-            <div style={{ display: 'grid', gap: 10 }}>
+            <div className="workflow-list">
                 {SOP_ORDER.map((step, index) => {
                     const isActive = step === sopStatus
                     const isCompleted = currentIndex >= index && currentIndex !== -1
@@ -23,10 +33,10 @@ export default function SOPTimeline({ sopStatus }) {
                                 background: isActive ? '#eef2ff' : '#fff',
                             }}
                         >
-                            <strong>{SOP_LABELS[step] || step}</strong>
+                            <strong>{labelMap[step] || step}</strong>
                             {isActive && (
                                 <span style={{ marginLeft: 8, fontSize: 12 }}>
-                                    (Current)
+                                    ({t.current})
                                 </span>
                             )}
                         </div>

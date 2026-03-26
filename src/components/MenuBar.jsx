@@ -38,6 +38,7 @@ export const MenuBar = ({
     isOcrLoading,
     ocrError,
     isReadOnly = false,
+    canCreateNewVersion = true
 }) => {
     const fileInputRef = useRef(null)
     const { t } = useLanguage()
@@ -91,15 +92,18 @@ export const MenuBar = ({
                     {t.save}
                 </button>
 
+
+
                 <button
                     type="button"
-                    onClick={() => runIfEditable(onNewVersion)}
+                    onClick={onNewVersion}
                     title={`${t.newVersion} (${shortcutShift('V')})`}
                     className="version-btn"
-                    disabled={isReadOnly}
+                    disabled={!canCreateNewVersion}
                 >
                     {t.newVersion}
                 </button>
+
 
                 <select
                     value={currentVersion}
@@ -364,9 +368,9 @@ export const MenuBar = ({
                     type="button"
                     onClick={handleOCRButtonClick}
                     disabled={isReadOnly || isOcrLoading}
-                    title="Import OCR text from PDF or DOCX"
+                    title={t.importOcrTooltip}
                 >
-                    {isOcrLoading ? 'Extracting...' : 'Import PDF/DOCX'}
+                    {isOcrLoading ? t.extracting : t.importPdfDocx}
                 </button>
 
                 <input
