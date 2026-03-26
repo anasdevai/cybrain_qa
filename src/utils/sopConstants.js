@@ -28,12 +28,14 @@ export const SOP_ACTIONS = {
 
 export const DEFAULT_SOP_METADATA = {
     documentId: '',
+    title: '',
     department: '',
     author: '',
     reviewer: '',
     effectiveDate: '',
     reviewDate: '',
     riskLevel: '',
+    regulatoryReferences: [],
     references: [],
 }
 
@@ -43,5 +45,7 @@ export const DEFAULT_SOP_VERSION_METADATA = {
     auditTrail: [],
     versionNote: '',
     approvedBy: '',
+    approvalSignature: '',
+    replacementDocumentId: '',
     obsoleteReason: '',
 }

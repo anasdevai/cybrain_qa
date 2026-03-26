@@ -34,7 +34,7 @@ export default function SOPReferencesPanel({
                         placeholder={t.addReference}
                         className="review-link-input"
                     />
-                    <button type="button" className="primary-btn" onClick={addReference}>
+                    <button type="button" className="primary-btn sop-add-btn" onClick={addReference}>
                         {t.add}
                     </button>
                 </div>

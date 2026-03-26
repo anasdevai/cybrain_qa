@@ -1,6 +1,6 @@
 import { useLanguage } from '../../context/LanguageContext'
 
-export default function SOPAuditTrail({ auditTrail = [] }) {
+export default function SOPAuditTrail({ auditTrail = [], currentVersion }) {
     const { t } = useLanguage()
 
     const labelMap = {
@@ -16,7 +16,7 @@ export default function SOPAuditTrail({ auditTrail = [] }) {
     }
 
     return (
-        <div className="contract-panel">
+        <div className="review-actions">
             <h3>{t.sopAuditTrail}</h3>
 
             {auditTrail.length === 0 ? (
@@ -26,28 +26,35 @@ export default function SOPAuditTrail({ auditTrail = [] }) {
                     {auditTrail
                         .slice()
                         .reverse()
-                        .map((entry) => (
+                        .map((entry, index) => (
                             <div
-                                key={entry.id || `${entry.createdAt}-${entry.action}`}
+                                key={entry.id || `${entry.createdAt}-${entry.action}-${index}`}
                                 className="review-comment-item"
                             >
                                 <p style={{ marginBottom: 6 }}>
-                                    <strong>{getActionLabel(entry)}</strong>
+                                    <strong>
+                                        {currentVersion ? `Version ${currentVersion} ` : ''}
+                                        {getActionLabel(entry)}
+                                    </strong>
                                 </p>
 
-                                {entry.action !== 'created_new_revision' && (entry.fromStatus || entry.toStatus) && (
-                                    <p style={{ marginBottom: 6 }}>
-                                        {entry.fromStatus ? (
-                                            <>
-                                                {t.from}: {labelMap[entry.fromStatus] || entry.fromStatus}
-                                                {' -> '}
-                                            </>
-                                        ) : null}
-                                        {t.to}: {labelMap[entry.toStatus] || entry.toStatus}
-                                    </p>
-                                )}
+                                {entry.action !== 'created_new_revision' &&
+                                    (entry.fromStatus || entry.toStatus) && (
+                                        <p style={{ marginBottom: 6 }}>
+                                            {entry.fromStatus ? (
+                                                <>
+                                                    {t.from}: {labelMap[entry.fromStatus] || entry.fromStatus}
+                                                    {' -> '}
+                                                </>
+                                            ) : null}
+                                            {t.to}: {labelMap[entry.toStatus] || entry.toStatus}
+                                        </p>
+                                    )}
+
                                 {entry.note ? (
-                                    <p style={{ marginBottom: 6 }}>{entry.note}</p>
+                                    <p style={{ marginBottom: 6 }}>
+                                        {t.change}: "{entry.note}"
+                                    </p>
                                 ) : null}
 
                                 <small>

@@ -5,6 +5,10 @@ export const validateSOPMetadata = (metadata = {}) => {
         errors.documentId = 'Document ID is required.'
     }
 
+    if (!metadata.title?.trim()) {
+        errors.title = 'Title is required.'
+    }
+
     if (!metadata.author?.trim()) {
         errors.author = 'Author is required.'
     }
@@ -22,7 +26,7 @@ export const canSubmitSOPForReview = ({ metadata = {}, note = '' }) => {
     if (!note?.trim()) {
         return {
             ok: false,
-            error: 'A review note is required before submitting for review.',
+            error: 'A change summary is required before submitting for review.',
             fieldErrors: metadataErrors,
         }
     }
@@ -35,14 +39,14 @@ export const canSubmitSOPForReview = ({ metadata = {}, note = '' }) => {
         }
     }
 
-    return {
-        ok: true,
-        error: '',
-        fieldErrors: {},
-    }
+    return { ok: true, error: '', fieldErrors: {} }
 }
 
-export const canApproveSOP = ({ metadata = {}, references = [] }) => {
+export const canApproveSOP = ({
+    metadata = {},
+    references = [],
+    approvalSignature = '',
+}) => {
     const metadataErrors = validateSOPMetadata(metadata)
 
     if (Object.keys(metadataErrors).length > 0) {
@@ -53,33 +57,44 @@ export const canApproveSOP = ({ metadata = {}, references = [] }) => {
         }
     }
 
-    if (!references?.length) {
+    if (!references?.length && !metadata?.regulatoryReferences?.length) {
         return {
             ok: false,
-            error: 'At least one SOP reference is required before approval.',
+            error: 'At least one reference or regulatory reference is required before approval.',
             fieldErrors: {},
         }
     }
 
-    return {
-        ok: true,
-        error: '',
-        fieldErrors: {},
+    if (!approvalSignature?.trim()) {
+        return {
+            ok: false,
+            error: 'Approval signature is required before marking the SOP as Effective.',
+            fieldErrors: {},
+        }
     }
+
+    return { ok: true, error: '', fieldErrors: {} }
 }
 
-export const canMarkSOPObsolete = ({ note = '' }) => {
+export const canMarkSOPObsolete = ({
+    note = '',
+    replacementDocumentId = '',
+}) => {
     if (!note?.trim()) {
         return {
             ok: false,
-            error: 'An obsolete reason is required.',
+            error: 'A reason is required before marking the SOP as Obsolete.',
             fieldErrors: {},
         }
     }
 
-    return {
-        ok: true,
-        error: '',
-        fieldErrors: {},
+    if (!replacementDocumentId?.trim()) {
+        return {
+            ok: false,
+            error: 'Replacement Document ID is required before marking the SOP as Obsolete.',
+            fieldErrors: {},
+        }
     }
+
+    return { ok: true, error: '', fieldErrors: {} }
 }

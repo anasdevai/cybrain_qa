@@ -160,6 +160,18 @@ export const translations = {
         extracting: 'Extracting...',
         importPdfDocx: 'Import PDF/DOCX',
         importOcrTooltip: 'Import OCR text from PDF or DOCX',
+
+
+
+
+        title: 'Title',
+        regulatoryReferences: 'Regulatory References (one per line)',
+        approvalSignature: 'Approval Signature',
+        replacementDocumentId: 'Replacement Document ID',
+        change: 'Change',
+        newRevisionCreated: 'New Revision Created',
+        effective: 'Effective',
+        obsolete: 'Obsolete',
     },
 
     de: {
@@ -324,5 +336,16 @@ export const translations = {
         extracting: 'Extrahieren...',
         importPdfDocx: 'PDF/DOCX importieren',
         importOcrTooltip: 'OCR-Text aus PDF oder DOCX importieren',
+
+
+
+        title: 'Titel',
+        regulatoryReferences: 'Regulatorische Referenzen (eine pro Zeile)',
+        approvalSignature: 'Genehmigungssignatur',
+        replacementDocumentId: 'Ersatzdokument-ID',
+        change: 'Änderung',
+        newRevisionCreated: 'Neue Revision erstellt',
+        effective: 'Gültig',
+        obsolete: 'Veraltet',
     },
 }

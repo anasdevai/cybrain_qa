@@ -19,6 +19,7 @@ import {
 import { transitionSOP, canEditSOP } from './utils/sopStateMachine'
 
 
+
 import {
   canSubmitSOPForReview,
   canApproveSOP,
@@ -494,16 +495,27 @@ const App = () => {
     },
     [currentSOPMetadata, updateSOPState]
   )
+
+
+
   const approveSOP = useCallback(
-    async (note = '') => {
+    async ({ note = '', approvalSignature = '' } = {}) => {
       const result = canApproveSOP({
         metadata: currentSOPMetadata,
-        references: currentSOPMetadata?.references || [],
+        references: [
+          ...(currentSOPMetadata?.references || []),
+          ...(currentSOPMetadata?.regulatoryReferences || []),
+        ],
+        approvalSignature,
       })
 
       setSOPFieldErrors(result.fieldErrors || {})
 
       if (!result.ok) return result
+
+      updateCurrentVersionMetadata({
+        approvalSignature,
+      })
 
       updateSOPState(
         SOP_STATES.EFFECTIVE,
@@ -513,8 +525,9 @@ const App = () => {
       setSOPFieldErrors({})
       return { ok: true }
     },
-    [currentSOPMetadata, updateSOPState]
+    [currentSOPMetadata, updateCurrentVersionMetadata, updateSOPState]
   )
+
   const sendSOPBackToDraft = useCallback(
     async (note = '') => {
       updateSOPState(
@@ -528,10 +541,18 @@ const App = () => {
     [updateSOPState]
   )
   const markSOPObsolete = useCallback(
-    async (note = '') => {
-      const result = canMarkSOPObsolete({ note })
+    async ({ note = '', replacementDocumentId = '' } = {}) => {
+      const result = canMarkSOPObsolete({
+        note,
+        replacementDocumentId,
+      })
 
       if (!result.ok) return result
+
+      updateCurrentVersionMetadata({
+        replacementDocumentId,
+        obsoleteReason: note,
+      })
 
       updateSOPState(
         SOP_STATES.OBSOLETE,
@@ -541,7 +562,7 @@ const App = () => {
       setSOPFieldErrors({})
       return { ok: true }
     },
-    [updateSOPState]
+    [updateCurrentVersionMetadata, updateSOPState]
   )
 
   useEffect(() => {
@@ -651,6 +672,8 @@ const App = () => {
             versionNote: '',
             approvedBy: '',
             obsoleteReason: '',
+            approvalSignature: '',
+            replacementDocumentId: '',
           }
           : {
             sopStatus:
@@ -747,6 +770,7 @@ const App = () => {
 
     return () => editor.off('update', updateBlockCount)
   }, [editor])
+
 
   useEffect(() => {
     if (!editor || isInitialized.current) return
@@ -1108,7 +1132,10 @@ const App = () => {
 
             <SOPTimeline sopStatus={currentSOPStatus} />
 
-            <SOPAuditTrail auditTrail={currentSOPAuditTrail} />
+            <SOPAuditTrail
+              auditTrail={currentSOPAuditTrail}
+              currentVersion={currentVersionId}
+            />
           </div>
         )}
       </div>

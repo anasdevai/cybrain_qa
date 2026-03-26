@@ -16,10 +16,10 @@ export default function SOPMetadataPanel({
     }
 
     return (
-        <div className="contract-panel">
+        <div className="review-actions">
             <h3>{t.sopMetadata}</h3>
 
-            <div className="variables-list">
+            <div style={{ display: 'grid', gap: 10 }}>
                 <div>
                     <input
                         type="text"
@@ -36,12 +36,23 @@ export default function SOPMetadataPanel({
                 <div>
                     <input
                         type="text"
-                        placeholder={t.department}
-                        value={metadata?.department || ''}
-                        onChange={(e) => handleFieldChange('department', e.target.value)}
+                        placeholder={t.title}
+                        value={metadata?.title || ''}
+                        onChange={(e) => handleFieldChange('title', e.target.value)}
                         disabled={isReadOnly}
                     />
+                    {errors.title && (
+                        <p style={{ color: 'red', fontSize: 12 }}>{errors.title}</p>
+                    )}
                 </div>
+
+                <input
+                    type="text"
+                    placeholder={t.department}
+                    value={metadata?.department || ''}
+                    onChange={(e) => handleFieldChange('department', e.target.value)}
+                    disabled={isReadOnly}
+                />
 
                 <div>
                     <input
@@ -91,6 +102,22 @@ export default function SOPMetadataPanel({
                     value={metadata?.riskLevel || ''}
                     onChange={(e) => handleFieldChange('riskLevel', e.target.value)}
                     disabled={isReadOnly}
+                />
+
+                <textarea
+                    placeholder={t.regulatoryReferences}
+                    value={(metadata?.regulatoryReferences || []).join('\n')}
+                    onChange={(e) =>
+                        handleFieldChange(
+                            'regulatoryReferences',
+                            e.target.value
+                                .split('\n')
+                                .map((item) => item.trim())
+                                .filter(Boolean)
+                        )
+                    }
+                    disabled={isReadOnly}
+                    rows={4}
                 />
             </div>
         </div>

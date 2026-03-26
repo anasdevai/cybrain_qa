@@ -627,11 +627,15 @@ table {
 }
 
 .review-link-box {
-  margin-top: 12px;
   display: flex;
-  flex-direction: column;
-  gap: 8px;
+  gap: 10px;
+  align-items: center;
   width: 100%;
+}
+
+.review-link-box .review-link-input {
+  flex: 1;
+  min-width: 0;
 }
 
 .review-link-input,
