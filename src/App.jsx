@@ -60,6 +60,7 @@ import { PlaceholderSuggestion } from './extensions/PlaceholderSuggestion'
 import { mapOCRBlocksToHTML } from './utils/mapOCRBlocksToHTML'
 import { formatOCRText } from './utils/formatOCRText'
 
+import featureFlags from './config/featureFlags'
 import './App.css'
 
 const STORAGE_KEY = 'tiptap_editor_v5_stable'
@@ -89,7 +90,7 @@ const App = () => {
   const [blockCount, setBlockCount] = useState(0)
   const [isLinkModalOpen, setIsLinkModalOpen] = useState(false)
   const [linkModalInitialUrl, setLinkModalInitialUrl] = useState('')
-  const [profile, setProfile] = useState('contract')
+  const [profile, setProfile] = useState(featureFlags.defaultProfile)
   const [isPreviewModalOpen, setIsPreviewModalOpen] = useState(false)
 
   const [diffOldVersion, setDiffOldVersion] = useState(null)
@@ -114,8 +115,14 @@ const App = () => {
     syncPlaceholders,
   } = useContractVariables()
 
-  const normalizedProfile = profile?.toLowerCase() || 'contract'
-  const isContractProfile = normalizedProfile === 'contract'
+  const rawProfile = profile?.toLowerCase() || featureFlags.defaultProfile
+  // If the stored/selected profile is disabled, fall back to the default profile
+  const normalizedProfile =
+    (rawProfile === 'contract' && !featureFlags.contractProfileEnabled) ||
+    (rawProfile === 'sop' && !featureFlags.sopProfileEnabled)
+      ? featureFlags.defaultProfile
+      : rawProfile
+  const isContractProfile = normalizedProfile === 'contract' && featureFlags.contractProfileEnabled
   const isSOPProfile = normalizedProfile === 'sop'
 
   const currentVersion = versions.find((v) => v.id === currentVersionId)
@@ -149,7 +156,11 @@ const App = () => {
   const canCreateNewVersion = !isClientReviewMode
 
   const handleProfileChange = useCallback((value) => {
-    setProfile(value?.toLowerCase() || 'contract')
+    const next = value?.toLowerCase() || featureFlags.defaultProfile
+    // Prevent switching to a disabled profile
+    if (next === 'contract' && !featureFlags.contractProfileEnabled) return
+    if (next === 'sop' && !featureFlags.sopProfileEnabled) return
+    setProfile(next)
   }, [])
 
   const updateCurrentVersionMetadata = useCallback(
@@ -511,7 +522,7 @@ const App = () => {
   )
 
   useEffect(() => {
-    if (isContractProfile) {
+    if (isContractProfile && featureFlags.contractProfileEnabled) {
       setShowVariablesPanel(true)
     }
   }, [isContractProfile])
@@ -1019,7 +1030,7 @@ const App = () => {
           </div>
         </div>
 
-        {isContractProfile && showVariablesPanel && (
+        {isContractProfile && featureFlags.contractProfileEnabled && showVariablesPanel && (
           <div className="right-panel">
             {!isClientReviewMode && (
               <VariablesPanel

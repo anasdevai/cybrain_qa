@@ -1,5 +1,6 @@
 import React from 'react'
 import { useLanguage } from '../context/LanguageContext'
+import featureFlags from '../config/featureFlags'
 
 /**
  * StatusBar Component
@@ -54,8 +55,12 @@ const StatusBar = ({
                     onChange={(e) => onProfileChange(e.target.value)}
                     className="version-select profile-select-status"
                 >
-                    <option value="contract">{t.profileContract}</option>
-                    <option value="sop">{t.profileSop}</option>
+                    {featureFlags.contractProfileEnabled && (
+                        <option value="contract">{t.profileContract}</option>
+                    )}
+                    {featureFlags.sopProfileEnabled && (
+                        <option value="sop">{t.profileSop}</option>
+                    )}
                 </select>
 
                 <select
