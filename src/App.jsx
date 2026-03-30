@@ -54,6 +54,16 @@ import {
 import { debounce } from 'lodash'
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 
+import {
+  createDocument,
+  getDocument,
+  updateDocument,
+  getVersions,
+  createVersion,
+  getVersion,
+  updateVersionStatus,
+} from './api/editorApi'
+
 import { PlaceholderHighlight } from './extensions/PlaceholderHighlight'
 import { PlaceholderSuggestion } from './extensions/PlaceholderSuggestion'
 
@@ -85,6 +95,7 @@ const App = () => {
 
   const [versions, setVersions] = useState([])
   const [currentVersionId, setCurrentVersionId] = useState('v1')
+  const [documentId, setDocumentId] = useState(null)
   const [isSaving, setIsSaving] = useState(false)
   const [lastSaved, setLastSaved] = useState(null)
   const [blockCount, setBlockCount] = useState(0)
@@ -283,30 +294,23 @@ const App = () => {
 
   const debouncedSave = useMemo(
     () =>
-      debounce((json, vId, setVersionsRef, setLastSavedRef, setIsSavingRef) => {
-        setIsSavingRef(true)
-        setVersionsRef((prev) => {
-          const updated = prev.map((v) =>
-            v.id === vId
-              ? {
-                ...v,
-                json,
-                timestamp: formatTimestamp(new Date()),
-                isFormatted: true,
-                metadata: {
-                  ...(v.metadata || {}),
-                  variables,
-                },
-              }
-              : v
-          )
-          saveToStorage(updated)
-          setLastSavedRef(new Date())
-          setTimeout(() => setIsSavingRef(false), 800)
-          return updated
-        })
+      debounce(async (json, metadata) => {
+        if (!documentId) return
+        setIsSaving(true)
+
+        try {
+          await updateDocument(documentId, {
+            doc_json: json,
+            metadata_json: metadata,
+          })
+          setLastSaved(new Date())
+        } catch (error) {
+          console.error('Autosave failed:', error)
+        } finally {
+          setTimeout(() => setIsSaving(false), 800)
+        }
       }, 2000),
-    [variables]
+    [documentId]
   )
 
   const extensions = useMemo(
@@ -515,10 +519,26 @@ const App = () => {
         note || `Action: ${actionId}`
       )
 
+      // Sync status to backend
+      if (documentId && currentVersionId) {
+        try {
+          await updateVersionStatus(documentId, currentVersionId, {
+            status: transition.to,
+            metadata_json: {
+              ...(currentVersion?.metadata || {}),
+              ...extraMetadata,
+              sopStatus: transition.to,
+            },
+          })
+        } catch (err) {
+          console.error('Failed to sync SOP status to backend:', err)
+        }
+      }
+
       setSOPFieldErrors({})
       return { ok: true }
     },
-    [currentSOPMetadata, updateCurrentVersionMetadata, updateSOPState]
+    [currentSOPMetadata, updateCurrentVersionMetadata, updateSOPState, documentId, currentVersionId, currentVersion]
   )
 
   useEffect(() => {
@@ -557,118 +577,98 @@ const App = () => {
     }
   }, [editor])
 
-  const manualSave = useCallback(() => {
-    if (!editor || !isEditorEditable) return
+  const manualSave = useCallback(async () => {
+    if (!editor || !isEditorEditable || !documentId) return
 
     debouncedSave.cancel()
     setIsSaving(true)
 
     const json = editor.getJSON()
-
-    setVersions((prev) => {
-      const updated = prev.map((v) =>
-        v.id === currentVersionId
-          ? {
-            ...v,
-            json,
-            timestamp: formatTimestamp(new Date()),
-            isFormatted: true,
-            metadata: {
-              ...(v.metadata || {}),
-              variables,
-            },
-          }
-          : v
-      )
-
-      saveToStorage(updated)
-      setLastSaved(new Date())
-      setTimeout(() => setIsSaving(false), 800)
-      return updated
-    })
-  }, [editor, currentVersionId, debouncedSave, variables, isEditorEditable])
-
-  const createNewVersion = useCallback(() => {
-    if (!editor || !canCreateNewVersion) return
-
-    const versionNumber = versions.length + 1
-    const newId = `v${versionNumber}`
-    const json = editor.getJSON()
-    const isCreatingFromSOP = isSOPProfile
-
-    const newVersion = {
-      id: newId,
-      json,
-      timestamp: formatTimestamp(new Date()),
-      isFormatted: true,
-      metadata: {
-        variables,
-        reviewStatus: WORKFLOW_STATES.DRAFT,
-        sentForReviewAt: null,
-        reviewComments: [],
-        reviewToken: null,
-
-        ...(isCreatingFromSOP
-          ? {
-            sopStatus: SOP_STATES.DRAFT,
-            sopMetadata:
-              currentVersion?.metadata?.sopMetadata ||
-              DEFAULT_SOP_VERSION_METADATA.sopMetadata,
-            auditTrail: [
-              {
-                id: `audit_${Date.now()}`,
-                action: 'created_new_revision',
-                fromStatus: currentVersion?.metadata?.sopStatus || null,
-                toStatus: SOP_STATES.DRAFT,
-                note: `Created from ${currentVersion?.id} as a new draft revision`,
-                actor: 'Author',
-                createdAt: new Date().toISOString(),
-              },
-            ],
-            versionNote: '',
-            approvedBy: '',
-            obsoleteReason: '',
-            approvalSignature: '',
-            replacementDocumentId: '',
-          }
-          : {
-            sopStatus:
-              currentVersion?.metadata?.sopStatus || SOP_STATES.DRAFT,
-            sopMetadata:
-              currentVersion?.metadata?.sopMetadata ||
-              DEFAULT_SOP_VERSION_METADATA.sopMetadata,
-            auditTrail: currentVersion?.metadata?.auditTrail || [],
-            versionNote: currentVersion?.metadata?.versionNote || '',
-            approvedBy: currentVersion?.metadata?.approvedBy || '',
-            obsoleteReason:
-              currentVersion?.metadata?.obsoleteReason || '',
-          }),
-      },
+    const currentVer = versions.find((v) => v.id === currentVersionId)
+    const metadata = {
+      ...(currentVer?.metadata || {}),
+      variables,
     }
 
-    const updated = [...versions, newVersion]
-    saveToStorage(updated)
-    setVersions(updated)
-    setCurrentVersionId(newId)
-    setReviewLink('')
-    setReviewToken(null)
-    setSOPFieldErrors({})
+    try {
+      await updateDocument(documentId, {
+        doc_json: json,
+        metadata_json: metadata,
+      })
 
-    editor.commands.setContent(json, false)
-  }, [editor, versions, variables, currentVersion, canCreateNewVersion, isSOPProfile])
+      setVersions((prev) =>
+        prev.map((v) =>
+          v.id === currentVersionId
+            ? {
+              ...v,
+              json,
+              timestamp: formatTimestamp(new Date()),
+              metadata,
+            }
+            : v
+        )
+      )
+
+      setLastSaved(new Date())
+    } catch (error) {
+      console.error('Manual save failed:', error)
+    } finally {
+      setTimeout(() => setIsSaving(false), 800)
+    }
+  }, [editor, isEditorEditable, documentId, versions, currentVersionId, variables, debouncedSave])
+
+  const createNewVersionHandler = useCallback(async () => {
+    if (!editor || !canCreateNewVersion || !documentId) return
+
+    const json = editor.getJSON()
+
+    const currentMeta = currentVersion?.metadata || {}
+    const newMetadata = {
+      ...currentMeta,
+      variables,
+      sopStatus: SOP_STATES.DRAFT,
+    }
+
+    try {
+      const newVersion = await createVersion(documentId, {
+        doc_json: json,
+        change_summary: 'New version created',
+        metadata_json: newMetadata,
+      })
+
+      const fullVersion = await getVersion(documentId, newVersion.id)
+
+      const versionObj = {
+        id: fullVersion.id,
+        json: fullVersion.doc_json,
+        timestamp: formatTimestamp(new Date(fullVersion.created_at)),
+        isFormatted: true,
+        metadata: fullVersion.metadata_json || {},
+      }
+
+      setVersions((prev) => [...prev, versionObj])
+      setCurrentVersionId(fullVersion.id)
+      setReviewLink('')
+      setReviewToken(null)
+      setSOPFieldErrors({})
+      editor.commands.setContent(fullVersion.doc_json, false)
+    } catch (error) {
+      console.error('Create version failed:', error)
+    }
+  }, [editor, canCreateNewVersion, documentId, currentVersion, variables])
   useEffect(() => {
     if (!editor) return
 
     const handleUpdate = () => {
       if (!isEditorEditable) return
 
-      debouncedSave(
-        editor.getJSON(),
-        currentVersionId,
-        setVersions,
-        setLastSaved,
-        setIsSaving
-      )
+      const currentVer = versions.find((v) => v.id === currentVersionId)
+      const metadata = {
+        ...(currentVer?.metadata || {}),
+        variables,
+      }
+
+      debouncedSave(editor.getJSON(), metadata)
     }
 
     editor.on('update', handleUpdate)
@@ -677,31 +677,25 @@ const App = () => {
       editor.off('update', handleUpdate)
       debouncedSave.cancel()
     }
-  }, [editor, currentVersionId, debouncedSave, isEditorEditable])
+  }, [editor, currentVersionId, debouncedSave, isEditorEditable, versions, variables])
 
   const loadVersion = useCallback(
-    (versionId) => {
-      const version = versions.find((v) => v.id === versionId)
+    async (versionId) => {
+      if (!documentId || !editor) return
 
-      if (version && editor) {
-        editor.commands.setContent(version.json, false)
-        setCurrentVersionId(versionId)
-        setVariables(version.metadata?.variables || {})
-        setReviewToken(version.metadata?.reviewToken || null)
+      try {
+        const version = await getVersion(documentId, versionId)
+
+        editor.commands.setContent(version.doc_json, false)
+        setCurrentVersionId(version.id)
+        setVariables(version.metadata_json?.variables || {})
+        setReviewToken(version.metadata_json?.reviewToken || null)
         setSOPFieldErrors({})
-        if (version.metadata?.reviewToken) {
-          setReviewLink(
-            buildReviewLink({
-              token: version.metadata.reviewToken,
-              versionId,
-            })
-          )
-        } else {
-          setReviewLink('')
-        }
+      } catch (error) {
+        console.error('Load version failed:', error)
       }
     },
-    [editor, versions, setVariables]
+    [documentId, editor, setVariables]
   )
 
   const text = editor?.getText() || ''
@@ -731,89 +725,38 @@ const App = () => {
   useEffect(() => {
     if (!editor || isInitialized.current) return
 
-    const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]')
+    const init = async () => {
+      try {
+        const created = await createDocument({
+          title: 'My SOP Document',
+          profile: 'sop',
+        })
 
-    if (saved.length > 0) {
-      const normalizedSaved = saved.map((version) => ({
-        ...version,
-        metadata: {
-          ...(version.metadata || {}),
-          variables: version.metadata?.variables || {},
-          reviewStatus: version.metadata?.reviewStatus || WORKFLOW_STATES.DRAFT,
-          sentForReviewAt: version.metadata?.sentForReviewAt || null,
-          reviewComments: version.metadata?.reviewComments || [],
-          reviewToken: version.metadata?.reviewToken || null,
-          sopStatus: version.metadata?.sopStatus || SOP_STATES.DRAFT,
-          sopMetadata:
-            version.metadata?.sopMetadata ||
-            DEFAULT_SOP_VERSION_METADATA.sopMetadata,
-          auditTrail: version.metadata?.auditTrail || [],
-          versionNote: version.metadata?.versionNote || '',
-          approvedBy: version.metadata?.approvedBy || '',
-          obsoleteReason: version.metadata?.obsoleteReason || '',
-        },
-      }))
+        setDocumentId(created.id)
 
-      setVersions(normalizedSaved)
+        const doc = await getDocument(created.id)
 
-      const lastVersion = normalizedSaved[normalizedSaved.length - 1]
-      setCurrentVersionId(lastVersion.id)
-      editor.commands.setContent(lastVersion.json, false)
-      setVariables(lastVersion.metadata?.variables || {})
-      setReviewToken(lastVersion.metadata?.reviewToken || null)
+        const currentVer = doc.current_version
+        const versionObj = {
+          id: currentVer.id,
+          json: currentVer.doc_json,
+          timestamp: formatTimestamp(new Date(currentVer.created_at)),
+          isFormatted: true,
+          metadata: currentVer.metadata_json || {},
+        }
 
-      if (lastVersion.metadata?.reviewToken) {
-        setReviewLink(
-          buildReviewLink({
-            token: lastVersion.metadata.reviewToken,
-            versionId: lastVersion.id,
-          })
-        )
+        setVersions([versionObj])
+        setCurrentVersionId(currentVer.id)
+        editor.commands.setContent(currentVer.doc_json, false)
+        setVariables(currentVer.metadata_json?.variables || {})
+      } catch (error) {
+        console.error('Failed to initialize document:', error)
+      } finally {
+        isInitialized.current = true
       }
-    } else {
-      const initialContent = {
-        type: 'doc',
-        content: [
-          {
-            type: 'heading',
-            attrs: { level: 1 },
-            content: [{ type: 'text', text: 'AI Law Document Example' }],
-          },
-          {
-            type: 'paragraph',
-            content: [
-              {
-                type: 'text',
-                text: 'Testing versioning, block IDs and table structure.',
-              },
-            ],
-          },
-        ],
-      }
-
-      const initialVersion = {
-        id: 'v1',
-        json: initialContent,
-        timestamp: formatTimestamp(new Date()),
-        isFormatted: true,
-        metadata: {
-          variables: {},
-          reviewStatus: WORKFLOW_STATES.DRAFT,
-          sentForReviewAt: null,
-          reviewComments: [],
-          reviewToken: null,
-          ...DEFAULT_SOP_VERSION_METADATA,
-        },
-      }
-
-      setVersions([initialVersion])
-      setCurrentVersionId('v1')
-      editor.commands.setContent(initialContent, false)
-      setVariables(initialVersion.metadata?.variables || {})
-      saveToStorage([initialVersion])
     }
 
-    isInitialized.current = true
+    init()
   }, [editor, setVariables])
 
   useEffect(() => {
@@ -922,7 +865,7 @@ const App = () => {
       if (!isEditorEditable) {
         if (mod && e.shiftKey && !e.altKey && key === 'v' && canCreateNewVersion) {
           e.preventDefault()
-          createNewVersion()
+          createNewVersionHandler()
           return
         }
 
@@ -939,7 +882,7 @@ const App = () => {
 
       if (mod && e.shiftKey && !e.altKey && key === 'v') {
         e.preventDefault()
-        createNewVersion()
+        createNewVersionHandler()
       }
 
       if (mod && !e.shiftKey && !e.altKey && key === 'p') {
@@ -950,7 +893,7 @@ const App = () => {
 
     window.addEventListener('keydown', handleGlobalKeyDown)
     return () => window.removeEventListener('keydown', handleGlobalKeyDown)
-  }, [editor, variables, manualSave, createNewVersion, isEditorEditable, canCreateNewVersion])
+  }, [editor, variables, manualSave, createNewVersionHandler, isEditorEditable, canCreateNewVersion])
 
   if (!editor) return <div className="loading">Loading AI-LAW Editor...</div>
 
@@ -995,7 +938,7 @@ const App = () => {
         <MenuBar
           editor={editor}
           onSave={manualSave}
-          onNewVersion={createNewVersion}
+          onNewVersion={createNewVersionHandler}
           currentVersion={currentVersionId}
           onLoadVersion={loadVersion}
           onCompare={compareTwoVersions}
