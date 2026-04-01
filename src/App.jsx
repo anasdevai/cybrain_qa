@@ -32,6 +32,7 @@ import { TableCell } from '@tiptap/extension-table-cell'
 import { TableHeader } from '@tiptap/extension-table-header'
 import { extractPlaceholdersFromText } from './utils/resolveVariables'
 import { printDocument } from './utils/printHelpers'
+import TopNavbar from './components/TopNavbar'
 import { MenuBar } from './components/MenuBar'
 import StatusBar from './components/StatusBar'
 import LinkModal from './components/LinkModal'
@@ -1039,6 +1040,7 @@ const App = () => {
 
   return (
     <div className="editor-wrapper">
+      <TopNavbar />
       {!isClientReviewMode && (
         <MenuBar
           editor={editor}

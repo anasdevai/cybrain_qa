@@ -1,0 +1,37 @@
+@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&family=Newsreader:opsz,wght@6..72,400;6..72,500;6..72,700&display=swap');
+
+:root {
+  /* Colors - Juris Obsidian (Deep Navy, Slate Gray, Gold) */
+  --color-primary: #000a1e;
+  --color-primary-container: #002147;
+  --color-on-primary: #ffffff;
+  
+  --color-secondary: #50606f;
+  
+  --color-tertiary: #735c00;
+  --color-tertiary-container: #cca830;
+  --color-tertiary-hover: #e9c349;
+  
+  --color-surface: #f8f9fa; /* Base Layer (Desk) */
+  --color-surface-container-lowest: #ffffff; /* Floating Elements / Main Paper */
+  --color-surface-container-low: #f3f4f5; /* Separated Workspace Layout */
+  --color-surface-container-high: #e7e8e9; /* Sidebar Panels */
+  
+  --color-on-surface: #191c1d;
+  --color-ghost-border: rgba(196, 198, 207, 0.4); /* Used for accessible structural borders */
+  
+  /* Typography */
+  --font-heading: 'Newsreader', serif;
+  --font-body: 'Manrope', sans-serif;
+  
+  /* Elevations / Ambient Shadows */
+  --shadow-sm: 0 4px 20px rgba(25, 28, 29, 0.04);
+  --shadow-md: 0 12px 30px rgba(25, 28, 29, 0.08); /* Replaces harsh standard box-shadows */
+  --shadow-ambient: 0 24px 40px -4px rgba(25, 28, 29, 0.08);
+  
+  /* Radii */
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 16px;
+  --radius-xl: 30px;
+}
