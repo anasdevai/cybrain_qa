@@ -15,11 +15,9 @@ import { SOPConfigProvider } from './context/SOPConfigContext';
 
 // Create the React root and render the application tree
 ReactDOM.createRoot(document.getElementById('root')).render(
-  <React.StrictMode>
-    <LanguageProvider>
-      <SOPConfigProvider>
-        <App />
-      </SOPConfigProvider>
-    </LanguageProvider>
-  </React.StrictMode>,
+  <LanguageProvider>
+    <SOPConfigProvider>
+      <App />
+    </SOPConfigProvider>
+  </LanguageProvider>,
 );

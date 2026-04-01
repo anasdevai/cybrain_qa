@@ -227,21 +227,24 @@ const SideBySideViewer = ({ oldVersion, newVersion, onClose }) => {
         return <div className="sbs-error">Missing versions for comparison.</div>;
     }
 
+    const oldVersionName = oldVersion.versionNumber ? `v${oldVersion.versionNumber}` : oldVersion.id;
+    const newVersionName = newVersion.versionNumber ? `v${newVersion.versionNumber}` : newVersion.id;
+
     return (
         <div className="sbs-overlay">
             <div className="sbs-modal">
                 <div className="sbs-header">
                     <h2>
-                        Comparing <span className="sbs-badge old">{oldVersion.id}</span>
+                        Comparing <span className="sbs-badge old">{oldVersionName}</span>
                         {' vs '}
-                        <span className="sbs-badge new">{newVersion.id}</span>
+                        <span className="sbs-badge new">{newVersionName}</span>
                     </h2>
                     <button className="sbs-close" onClick={onClose}>&times;</button>
                 </div>
 
                 <div className="sbs-body">
                     <div className="sbs-panel sbs-old-panel">
-                        <div className="sbs-panel-title">Original ({oldVersion.id})</div>
+                        <div className="sbs-panel-title">Original ({oldVersionName})</div>
                         <div className="sbs-content read-only">
                             {oldVersion.json ? (
                                 <DiffNodeRenderer node={oldVersion.json} />
@@ -252,7 +255,7 @@ const SideBySideViewer = ({ oldVersion, newVersion, onClose }) => {
                     </div>
 
                     <div className="sbs-panel sbs-diff-panel">
-                        <div className="sbs-panel-title">Changes ({newVersion.id})</div>
+                        <div className="sbs-panel-title">Changes ({newVersionName})</div>
                         <div className="sbs-content read-only">
                             {diffAst && diffAst.content?.length > 0 ? (
                                 <DiffNodeRenderer node={diffAst} />

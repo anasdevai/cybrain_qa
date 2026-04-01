@@ -21,6 +21,8 @@ export default function SOPReferencesPanel({
         onChange?.(references.filter((_, index) => index !== indexToRemove))
     }
 
+    const validReferences = Array.isArray(references) ? references : []
+
     return (
         <div className="contract-panel">
             <h3>{t.sopReferences}</h3>
@@ -40,11 +42,11 @@ export default function SOPReferencesPanel({
                 </div>
             )}
 
-            {references.length === 0 ? (
+            {validReferences.length === 0 ? (
                 <p className="muted-text">{t.noReferencesYet}</p>
             ) : (
                 <div className="review-comments-list">
-                    {references.map((ref, index) => (
+                    {validReferences.map((ref, index) => (
                         <div
                             key={`${ref}-${index}`}
                             className="review-comment-item"

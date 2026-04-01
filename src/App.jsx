@@ -92,6 +92,7 @@ const saveToStorage = (updatedVersions) => {
 const App = () => {
   const editorRef = useRef(null)
   const isInitialized = useRef(false)
+  const initStarted = useRef(false)
 
   const [versions, setVersions] = useState([])
   const [currentVersionId, setCurrentVersionId] = useState('v1')
@@ -640,6 +641,7 @@ const App = () => {
 
       const versionObj = {
         id: fullVersion.id,
+        versionNumber: fullVersion.version_number,
         json: fullVersion.doc_json,
         timestamp: formatTimestamp(new Date(fullVersion.created_at)),
         isFormatted: true,
@@ -686,17 +688,76 @@ const App = () => {
       try {
         const version = await getVersion(documentId, versionId)
 
-        editor.commands.setContent(version.doc_json, false)
+        editor.commands.setContent(version.doc_json || { type: 'doc', content: [] }, false)
         setCurrentVersionId(version.id)
         setVariables(version.metadata_json?.variables || {})
         setReviewToken(version.metadata_json?.reviewToken || null)
         setSOPFieldErrors({})
+
+        // Sync fetched version data into local versions array so SOP panel reads fresh metadata
+        setVersions((prev) =>
+          prev.map((v) =>
+            v.id === version.id
+              ? {
+                ...v,
+                json: version.doc_json || { type: 'doc', content: [] },
+                metadata: version.metadata_json || {},
+                status: version.status,
+              }
+              : v
+          )
+        )
       } catch (error) {
         console.error('Load version failed:', error)
       }
     },
     [documentId, editor, setVariables]
   )
+
+  const refreshDocumentFromBackend = useCallback(async (docId) => {
+    if (!docId || !editor) return
+
+    try {
+      const doc = await getDocument(docId)
+      const dbVersions = await getVersions(docId)
+      const mappedVersions = dbVersions.map((v) => ({
+        id: v.id,
+        versionNumber: v.version_number,
+        json: v.doc_json || { type: 'doc', content: [] },
+        metadata: v.metadata_json || {},
+        status: v.status,
+        timestamp: formatTimestamp(new Date(v.created_at)),
+        isFormatted: true,
+      }))
+
+      const currentVer = doc.current_version
+      const finalVersions = mappedVersions.map((v) =>
+        v.id === currentVer.id
+          ? { ...v, json: currentVer.doc_json || { type: 'doc', content: [] }, metadata: currentVer.metadata_json || {} }
+          : v
+      )
+
+      setVersions(finalVersions)
+      setCurrentVersionId(currentVer.id)
+      editor.commands.setContent(currentVer.doc_json || { type: 'doc', content: [] }, false)
+      setVariables(currentVer.metadata_json?.variables || {})
+      setReviewToken(currentVer.metadata_json?.reviewToken || null)
+      setSOPFieldErrors({})
+    } catch (error) {
+      console.error('Failed to refresh document:', error)
+    }
+  }, [editor, setVariables])
+
+  useEffect(() => {
+    window.refreshCurrentDocument = async () => {
+      const docId = localStorage.getItem('current_document_id')
+      if (docId) await refreshDocumentFromBackend(docId)
+    }
+    return () => {
+      delete window.refreshCurrentDocument
+    }
+  }, [refreshDocumentFromBackend])
+
 
   const text = editor?.getText() || ''
   const wordCount = text.split(/\s+/).filter(Boolean).length || 0
@@ -720,35 +781,79 @@ const App = () => {
 
     return () => editor.off('update', updateBlockCount)
   }, [editor])
-
-
   useEffect(() => {
-    if (!editor || isInitialized.current) return
+    if (!editor || isInitialized.current || initStarted.current) return
+    initStarted.current = true
 
     const init = async () => {
       try {
-        const created = await createDocument({
-          title: 'My SOP Document',
-          profile: 'sop',
-        })
+        let docId = localStorage.getItem('current_document_id')
 
-        setDocumentId(created.id)
+        if (docId) {
+          // Existing document — reload from DB
+          try {
+            const doc = await getDocument(docId)
+            setDocumentId(docId)
 
-        const doc = await getDocument(created.id)
+            // Load all versions from DB (now includes doc_json)
+            const dbVersions = await getVersions(docId)
+            const mappedVersions = dbVersions.map((v) => ({
+              id: v.id,
+              versionNumber: v.version_number,
+              json: v.doc_json || { type: 'doc', content: [] },
+              metadata: v.metadata_json || {},
+              status: v.status,
+              timestamp: formatTimestamp(new Date(v.created_at)),
+              isFormatted: true,
+            }))
 
-        const currentVer = doc.current_version
-        const versionObj = {
-          id: currentVer.id,
-          json: currentVer.doc_json,
-          timestamp: formatTimestamp(new Date(currentVer.created_at)),
-          isFormatted: true,
-          metadata: currentVer.metadata_json || {},
+            // Load full content for current version (safety: getDocument always has full doc_json)
+            const currentVer = doc.current_version
+            // Update current version's json in mapped list
+            const finalVersions = mappedVersions.map((v) =>
+              v.id === currentVer.id
+                ? { ...v, json: currentVer.doc_json || { type: 'doc', content: [] }, metadata: currentVer.metadata_json || {} }
+                : v
+            )
+
+            setVersions(finalVersions)
+            setCurrentVersionId(currentVer.id)
+            editor.commands.setContent(currentVer.doc_json || { type: 'doc', content: [] }, false)
+            setVariables(currentVer.metadata_json?.variables || {})
+          } catch (fetchError) {
+            // Document was deleted or not found — create fresh
+            console.warn('Stored document not found, creating new one:', fetchError)
+            localStorage.removeItem('current_document_id')
+            docId = null
+          }
         }
 
-        setVersions([versionObj])
-        setCurrentVersionId(currentVer.id)
-        editor.commands.setContent(currentVer.doc_json, false)
-        setVariables(currentVer.metadata_json?.variables || {})
+        if (!docId) {
+          // No existing document — create new
+          const created = await createDocument({
+            title: 'My SOP Document',
+            profile: 'sop',
+          })
+
+          setDocumentId(created.id)
+          localStorage.setItem('current_document_id', created.id)
+
+          const doc = await getDocument(created.id)
+          const currentVer = doc.current_version
+          const versionObj = {
+            id: currentVer.id,
+            versionNumber: currentVer.version_number,
+            json: currentVer.doc_json,
+            timestamp: formatTimestamp(new Date(currentVer.created_at)),
+            isFormatted: true,
+            metadata: currentVer.metadata_json || {},
+          }
+
+          setVersions([versionObj])
+          setCurrentVersionId(currentVer.id)
+          editor.commands.setContent(currentVer.doc_json, false)
+          setVariables(currentVer.metadata_json?.variables || {})
+        }
       } catch (error) {
         console.error('Failed to initialize document:', error)
       } finally {
@@ -1030,7 +1135,7 @@ const App = () => {
 
             <SOPAuditTrail
               auditTrail={currentSOPAuditTrail}
-              currentVersion={currentVersionId}
+              currentVersion={currentVersion?.versionNumber ? `v${currentVersion.versionNumber}` : currentVersionId}
             />
           </div>
         )}

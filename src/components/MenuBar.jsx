@@ -112,7 +112,7 @@ export const MenuBar = ({
                 >
                     {versions.map((v) => (
                         <option key={v.id} value={v.id}>
-                            {v.id} ({v.timestamp})
+                            v{v.versionNumber || '?'} ({v.timestamp})
                         </option>
                     ))}
                 </select>
@@ -314,7 +314,7 @@ export const MenuBar = ({
                     >
                         {versions.map((v) => (
                             <option key={v.id} value={v.id}>
-                                {t.base}: {v.id}
+                                {t.base}: v{v.versionNumber || '?'}
                             </option>
                         ))}
                     </select>
@@ -328,7 +328,7 @@ export const MenuBar = ({
                     >
                         {versions.map((v) => (
                             <option key={v.id} value={v.id}>
-                                {t.target}: {v.id}
+                                {t.target}: v{v.versionNumber || '?'}
                             </option>
                         ))}
                     </select>

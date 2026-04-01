@@ -1,0 +1,23 @@
+{
+  "entity_type": "sop",
+  "description": "Lifecycle configuration for Standard Operating Procedures",
+  "states": {
+    "draft": {
+      "is_initial": true,
+      "allowed_transitions": ["in_review"],
+      "required_fields": ["title", "department"]
+    },
+    "in_review": {
+      "allowed_transitions": ["effective", "draft"],
+      "required_fields": ["reviewer_id"]
+    },
+    "effective": {
+      "allowed_transitions": ["obsolete"],
+      "required_fields": ["effective_date"]
+    },
+    "obsolete": {
+      "allowed_transitions": [],
+      "requires_replacement": true
+    }
+  }
+}
