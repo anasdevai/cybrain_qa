@@ -1,4 +1,4 @@
-const API_BASE = 'http://127.0.0.1:8000'
+const API_BASE = import.meta.env.VITE_API_BASE || 'http://127.0.0.1:8000'
 
 // ─────────────────────────────────────────────────────
 // Helper: parse error body and throw with backend message
@@ -9,7 +9,7 @@ async function throwApiError(res, fallbackMsg) {
   try {
     const body = await res.json()
     if (body?.detail) detail = body.detail
-  } catch { /* ignore parse error */ }
+  } catch {}
   const err = new Error(detail)
   err.status = res.status
   throw err
@@ -45,14 +45,6 @@ export async function updateDocument(docId, payload) {
   return res.json()
 }
 
-/**
- * Duplicate the current document as a brand-new parent SOP.
- * Creates a new sops row + new sop_versions row (v1).
- * The new document gets its own unique sops.id.
- *
- * @param {string} docId - Source document id to copy content from
- * @param {object} payload - { title, doc_json?, metadata_json? }
- */
 export async function duplicateDocument(docId, payload) {
   const res = await fetch(`${API_BASE}/api/editor/docs/${docId}/duplicate`, {
     method: 'POST',
