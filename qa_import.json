@@ -1,0 +1,39 @@
+{
+  "entities": [
+    {
+      "sops": [
+        {
+          "id": "55555555-5555-5555-5555-555555555555",
+          "sop_number": "SOP-QA-001",
+          "title": "QA Audit SOP",
+          "versions": [
+            {
+              "id": "66666666-6666-6666-6666-666666666666",
+              "version_number": "1",
+              "external_status": "effective",
+              "content_json": { "type": "doc", "content": [{ "type": "paragraph", "content": [{ "type": "text", "text": "This is a test SOP." }] }] }
+            }
+          ]
+        }
+      ],
+      "deviations": [
+        {
+          "id": "77777777-7777-7777-7777-777777777777",
+          "deviation_number": "DEV-QA-001",
+          "title": "QA Audit Deviation"
+        }
+      ],
+      "capas": [
+        {
+          "id": "88888888-8888-8888-8888-888888888888",
+          "capa_number": "CAPA-QA-001",
+          "title": "QA Audit CAPA"
+        }
+      ],
+      "links": [
+        { "type": "sop-deviation", "source_id": "55555555-5555-5555-5555-555555555555", "target_id": "77777777-7777-7777-7777-777777777777" },
+        { "type": "deviation-capa", "source_id": "77777777-7777-7777-7777-777777777777", "target_id": "88888888-8888-8888-8888-888888888888" }
+      ]
+    }
+  ]
+}

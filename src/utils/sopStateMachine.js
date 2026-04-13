@@ -84,6 +84,7 @@ export function createAuditEntry({
     toStatus = null,
     note = '',
     actor = 'System',
+    version = null,
 }) {
     return {
         id: `audit_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
@@ -92,6 +93,7 @@ export function createAuditEntry({
         toStatus,
         note,
         actor,
+        version,
         createdAt: new Date().toISOString(),
     }
 }
@@ -111,6 +113,7 @@ export function transitionSOP({
     nextStatus,
     note = '',
     actor = 'System',
+    version = null,
     currentTrail = [],
     config = sopWorkflowConfig,
 }) {
@@ -128,6 +131,7 @@ export function transitionSOP({
         toStatus: nextStatus,
         note,
         actor,
+        version,
     })
 
     return {

@@ -33,7 +33,7 @@ export default function SOPAuditTrail({ auditTrail = [], currentVersion }) {
                             >
                                 <p style={{ marginBottom: 6 }}>
                                     <strong>
-                                        {currentVersion ? `Version ${currentVersion} ` : ''}
+                                        {entry.version ? `Version ${entry.version} ` : (currentVersion ? `Version ${currentVersion} ` : '')}
                                         {getActionLabel(entry)}
                                     </strong>
                                 </p>

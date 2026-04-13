@@ -8,7 +8,9 @@
 
 import React from 'react';
 import ReactDOM from 'react-dom/client';
+import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import App from './App.jsx';
+import StartTab from './pages/StartTab.jsx';
 import './index.css';
 import './App.css';
 import { LanguageProvider } from './context/LanguageContext';
@@ -18,7 +20,12 @@ import { SOPConfigProvider } from './context/SOPConfigContext';
 ReactDOM.createRoot(document.getElementById('root')).render(
   <LanguageProvider>
     <SOPConfigProvider>
-      <App />
+      <BrowserRouter>
+        <Routes>
+          <Route path="/" element={<StartTab />} />
+          <Route path="/editor" element={<App />} />
+        </Routes>
+      </BrowserRouter>
     </SOPConfigProvider>
   </LanguageProvider>,
 );

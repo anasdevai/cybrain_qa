@@ -7,18 +7,18 @@
  * StatusBar, and various dialog modals.
  */
 
-import SOPMetadataPanel from './components/SOP/SOPMetadataPanel'
-import SOPReferencesPanel from './components/SOP/SOPReferencesPanel'
-import SOPActions from './components/SOP/SOPActions'
-import SOPTimeline from './components/SOP/SOPTimeline'
-import SOPAuditTrail from './components/SOP/SOPAuditTrail'
+import SOPMetadataPanel from '../components/SOP/SOPMetadataPanel'
+import SOPReferencesPanel from '../components/SOP/SOPReferencesPanel'
+import SOPActions from '../components/SOP/SOPActions'
+import SOPTimeline from '../components/SOP/SOPTimeline'
+import SOPAuditTrail from '../components/SOP/SOPAuditTrail'
 import {
   DEFAULT_SOP_VERSION_METADATA,
   SOP_STATES,
-} from './utils/sopConstants'
-import { transitionSOP, canEditSOP } from './utils/sopStateMachine'
-import { validateSOPTransition } from './utils/sopValidation'
-import sopWorkflowConfig from './utils/sopWorkflowConfig'
+} from '../utils/sopConstants'
+import { transitionSOP, canEditSOP } from '../utils/sopStateMachine'
+import { validateSOPTransition } from '../utils/sopValidation'
+import sopWorkflowConfig from '../utils/sopWorkflowConfig'
 
 
 import { useEditor, EditorContent } from '@tiptap/react'
@@ -30,28 +30,28 @@ import { Table } from '@tiptap/extension-table'
 import { TableRow } from '@tiptap/extension-table-row'
 import { TableCell } from '@tiptap/extension-table-cell'
 import { TableHeader } from '@tiptap/extension-table-header'
-import { extractPlaceholdersFromText } from './utils/resolveVariables'
-import { printDocument } from './utils/printHelpers'
-import TopNavbar from './components/TopNavbar'
-import { MenuBar } from './components/MenuBar'
-import StatusBar from './components/StatusBar'
-import LinkModal from './components/LinkModal'
-import PreviewModal from './components/PreviewModal'
-import SideBySideViewer from './diff/SideBySideViewer'
-import Toast from './components/Toast'
+import { extractPlaceholdersFromText } from '../utils/resolveVariables'
+import { printDocument } from '../utils/printHelpers'
+import TopNavbar from '../components/TopNavbar'
+import { MenuBar } from '../components/MenuBar'
+import StatusBar from '../components/StatusBar'
+import LinkModal from '../components/LinkModal'
+import PreviewModal from '../components/PreviewModal'
+import SideBySideViewer from '../diff/SideBySideViewer'
+import Toast from '../components/Toast'
 
-import VariablesPanel from './components/contract/VariablesPanel'
-import WorkflowTimeline from './components/contract/WorkflowTimeline'
-import ReviewActions from './components/contract/ReviewActions'
-import ReviewLinkPanel from './components/contract/ReviewLinkPanel'
+import VariablesPanel from '../components/contract/VariablesPanel'
+import WorkflowTimeline from '../components/contract/WorkflowTimeline'
+import ReviewActions from '../components/contract/ReviewActions'
+import ReviewLinkPanel from '../components/contract/ReviewLinkPanel'
 
-import useContractVariables from './hooks/useContractVariables'
-import { WORKFLOW_LABELS, WORKFLOW_STATES } from './utils/contractConstants'
+import useContractVariables from '../hooks/useContractVariables'
+import { WORKFLOW_LABELS, WORKFLOW_STATES } from '../utils/contractConstants'
 import {
   createReviewToken,
   buildReviewLink,
   getReviewParamsFromUrl,
-} from './utils/reviewLinkUtils'
+} from '../utils/reviewLinkUtils'
 
 import { debounce } from 'lodash'
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
@@ -65,18 +65,18 @@ import {
   getVersion,
   updateVersionStatus,
   duplicateDocument,
-} from './api/editorApi'
+} from '../api/editorApi'
 
-import { isEditorContentEmpty } from './utils/editorUtils'
+import { isEditorContentEmpty } from '../utils/editorUtils'
 
-import { PlaceholderHighlight } from './extensions/PlaceholderHighlight'
-import { PlaceholderSuggestion } from './extensions/PlaceholderSuggestion'
+import { PlaceholderHighlight } from '../extensions/PlaceholderHighlight'
+import { PlaceholderSuggestion } from '../extensions/PlaceholderSuggestion'
 
-import { mapOCRBlocksToHTML } from './utils/mapOCRBlocksToHTML'
-import { formatOCRText } from './utils/formatOCRText'
+import { mapOCRBlocksToHTML } from '../utils/mapOCRBlocksToHTML'
+import { formatOCRText } from '../utils/formatOCRText'
 
-import featureFlags from './config/featureFlags'
-import './App.css'
+import featureFlags from '../config/featureFlags'
+import '../App.css'
 
 const STORAGE_KEY = 'tiptap_editor_v5_stable'
 
@@ -115,7 +115,7 @@ const saveToStorage = (updatedVersions) => {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(updatedVersions))
 }
 
-const App = () => {
+const EditorPage = () => {
   const editorRef = useRef(null)
   const isInitialized = useRef(false)
   const initStarted = useRef(false)
@@ -1388,4 +1388,4 @@ const App = () => {
   )
 }
 
-export default App
+export default EditorPage

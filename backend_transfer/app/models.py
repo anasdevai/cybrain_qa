@@ -12,7 +12,7 @@ class SOP(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     tenant_id = Column(UUID(as_uuid=True), nullable=False)
     external_id = Column(String(255), nullable=True)
-    sop_number = Column(String(100), nullable=False, unique=True)
+    sop_number = Column(String(100), nullable=False)
     title = Column(String(255), nullable=False)
     department = Column(String(100), nullable=True)
     source_system = Column(String(100), nullable=True)

@@ -8,13 +8,15 @@ app = FastAPI(
     title="Cybrain QS API",
     description="SOP Editor + Stage 1 Public Chatbot Data Provisioning API",
     version="1.0.0",
-    docs_url="/api/docs",
-    openapi_url="/api/openapi.json"
 )
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        "http://65.21.244.158",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -31,8 +33,6 @@ def root():
         "status": "ok",
         "message": "Cybrain QS API is running",
         "version": "1.0.0",
-        "docs": "/api/docs",
+        "docs": "/docs",
         
     }
-
-
