@@ -1,0 +1,35 @@
+# Local virtual environments
+.venv/
+venv/
+env/
+
+# Environment variables
+.env
+*.env
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Main folder (Requested by user)
+Main/
+
+# Test files (Requested by user)
+tests/
+testfiles/
+*.test.*
+
+# IDEs
+.vscode/
+.idea/
+
+# Node.js
+node_modules/
+dist/
+build/
+.npm
+.eslintcache
+
+# Logs
+*.log
