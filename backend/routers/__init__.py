@@ -1,5 +1,5 @@
 """FastAPI routers package."""
-
+"""API routers package."""
 # ADD THESE TO main.py manually:
 # from routers import auth, chat_history
 # app.include_router(auth.router)

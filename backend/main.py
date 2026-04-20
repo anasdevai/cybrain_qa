@@ -28,13 +28,15 @@ from retrieval.hybrid_retriever import HybridRetriever
 from retrieval.reranker import CrossEncoderReranker
 from retrieval.federated_retriever import FederatedRetriever
 from chain.rag_chain import HybridRAGChain, SmartRAGChain
-from routers import auth, chat_history, webhooks, data
+from routers import auth, chat_history, webhooks, data, sop_actions
 from storage.runtime_sync import RuntimeEndpointSync
 from auth.security import get_current_user
 from database.models import User, ChatSession, ChatMessage
 from database.config import get_db
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
+from action.runtime import build_action_runtime
+from action.service import SOPActionService
 
 from dotenv import load_dotenv
 import os
@@ -63,6 +65,7 @@ app.include_router(chat_history.router)
 app.include_router(webhooks.router)
 app.include_router(webhooks.legacy_router)
 app.include_router(data.router)
+app.include_router(sop_actions.router)
 app.state.runtime_sync_task = None
 
 
@@ -97,6 +100,9 @@ async def startup():
         federated_retriever.retrievers[section].collection_name = col
 
     app.state.smart_rag = SmartRAGChain(federated_retriever)
+    app.state.sop_action_service = SOPActionService(
+        build_action_runtime(client=client, embedder=embedder, reranker=reranker)
+    )
     print("[startup] Smart RAG chain ready (5 collections with query routing).")
 
     runtime_sync = RuntimeEndpointSync()

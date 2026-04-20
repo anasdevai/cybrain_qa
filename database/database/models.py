@@ -1,8 +1,8 @@
 """SQLAlchemy ORM models representing the PostgreSQL schema."""
 
 import uuid
-from sqlalchemy import Column, String, Boolean, Enum, DateTime, ForeignKey, Text, JSON
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy import Column, String, Boolean, Enum, DateTime, ForeignKey, Text, JSON, Integer
+from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from database.config import Base
@@ -24,6 +24,7 @@ class User(Base):
 
     # Relationships
     chat_sessions = relationship("ChatSession", back_populates="user", cascade="all, delete-orphan")
+    ai_suggestions = relationship("AISuggestion", back_populates="user")
 
     def __repr__(self):
         return f"<User(id={self.id}, email='{self.email}', username='{self.username}')>"
@@ -71,3 +72,33 @@ class ChatMessage(Base):
 
     def __repr__(self):
         return f"<ChatMessage(id={self.id}, session_id={self.session_id}, role='{self.role}')>"
+
+
+class AISuggestion(Base):
+    __tablename__ = "ai_suggestions"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    document_id = Column(String(255), nullable=False, index=True)
+    section_id = Column(String(255), nullable=False, index=True)
+    section_title = Column(String(255), nullable=True)
+    section_type = Column(String(100), nullable=True)
+    action_type = Column(String(50), nullable=False, index=True)
+    input_text = Column(Text, nullable=True)
+    output_text = Column(JSONB, nullable=False)
+    related_documents = Column(JSONB, nullable=True)
+    metadata_snapshot = Column(JSONB, nullable=True)
+    audit_log_snapshot = Column(JSONB, nullable=True)
+    action_metadata = Column(JSONB, nullable=True)
+    status = Column(String(20), nullable=False, default="pending", server_default="pending")
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    # Relationships
+    user = relationship("User", back_populates="ai_suggestions")
+
+    def __repr__(self):
+        return (
+            f"<AISuggestion(id={self.id}, action_type='{self.action_type}', "
+            f"document_id='{self.document_id}', section_id='{self.section_id}')>"
+        )
