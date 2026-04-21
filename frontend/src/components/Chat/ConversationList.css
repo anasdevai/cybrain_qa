@@ -1,0 +1,207 @@
+/* ConversationList.css — Left panel: conversation list with search & grouping */
+
+.conversation-list {
+  display: flex;
+  flex-direction: column;
+  width: 348px;
+  min-width: 280px;
+  max-width: 348px;
+  height: 100%;
+  background: #ffffff;
+  border-right: 1px solid var(--border-light);
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+/* ─── Header ─── */
+.conv-list__header {
+  padding: 14px 16px 12px;
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--border-light);
+}
+
+.conv-list__title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0 0 8px;
+}
+
+.conv-list__new-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  padding: 7px 10px;
+  background: var(--primary);
+  color: #fff;
+  border: none;
+  border-radius: 2px;
+  font-size: 10px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background var(--transition-fast);
+  margin-bottom: 8px;
+  justify-content: flex-start;
+}
+
+.conv-list__new-btn:hover {
+  background: var(--primary-hover);
+}
+
+/* ─── Search ─── */
+.conv-list__search {
+  position: relative;
+}
+
+.conv-list__search-icon {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-muted);
+  pointer-events: none;
+}
+
+.conv-list__search-input {
+  width: 100%;
+  height: 30px;
+  padding: 0 12px 0 38px;
+  background: var(--bg-main);
+  border: 1px solid var(--border-light);
+  border-radius: 2px;
+  font-size: 10px;
+  font-family: var(--font-sans);
+  color: var(--text-primary);
+  outline: none;
+  transition: border-color var(--transition-fast);
+}
+
+.conv-list__search-input:focus {
+  border-color: var(--primary);
+}
+
+.conv-list__search-input::placeholder {
+  color: var(--text-muted);
+}
+
+/* ─── Scrollable list ─── */
+.conv-list__items {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0;
+}
+
+/* ─── Date group ─── */
+.conv-list__group-label {
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--text-muted);
+  padding: 12px 16px 6px;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+/* ─── Conversation item ─── */
+.conv-item {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 10px 16px;
+  cursor: pointer;
+  border-left: 3px solid transparent;
+  transition: background var(--transition-fast), border-color var(--transition-fast);
+}
+
+.conv-item:hover {
+  background: var(--bg-main);
+}
+
+.conv-item--active {
+  background: #eaf4ee;
+  border-left-color: var(--primary);
+}
+
+.conv-item__top-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.conv-item__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--error);
+  flex-shrink: 0;
+}
+
+.conv-item__dot--hidden {
+  visibility: hidden;
+}
+
+.conv-item__title {
+  flex: 1;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin: 0;
+  line-height: 1.3;
+}
+
+.conv-item__time {
+  font-size: 10px;
+  color: var(--text-muted);
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+.conv-item__desc {
+  font-size: 10px;
+  color: var(--text-secondary);
+  margin: 0;
+  padding-left: 16px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.4;
+}
+
+.conv-item__tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  padding-left: 16px;
+}
+
+/* ─── Empty state ─── */
+.conv-list__empty {
+  padding: 32px 20px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+/* ─── Responsive ─── */
+
+/* Tablet: narrower list */
+@media (max-width: 1279px) {
+  .conversation-list {
+    width: 300px;
+    max-width: 300px;
+  }
+}
+
+/* Mobile / small tablet: full width, single panel */
+@media (max-width: 1023px) {
+  .conversation-list {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    border-right: none;
+  }
+}

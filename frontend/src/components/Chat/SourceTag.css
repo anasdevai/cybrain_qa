@@ -1,0 +1,90 @@
+/* SourceTag.css — Colored reference badges for SOPs, DEVs, CAPAs, etc. */
+
+.source-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 10px;
+  border-radius: var(--radius-full);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.4;
+  white-space: nowrap;
+  border: 1px solid transparent;
+  transition: opacity var(--transition-fast);
+  cursor: default;
+}
+
+.source-tag:hover {
+  opacity: 0.85;
+}
+
+/* ─── Tag type variants ─── */
+
+/* SOP — green */
+.source-tag--sop {
+  background-color: #dff5e3;
+  color: #2b6e3f;
+  border-color: #c2e8cb;
+}
+
+/* DEV — red/warning */
+.source-tag--dev {
+  background-color: #fde8e8;
+  color: #b91c1c;
+  border-color: #f9caca;
+}
+
+/* CAPA — amber */
+.source-tag--capa {
+  background-color: #fef3cd;
+  color: #92600a;
+  border-color: #fce7a0;
+}
+
+/* Audit — blue-gray */
+.source-tag--audit {
+  background-color: #e8ecf1;
+  color: #475569;
+  border-color: #d1d9e4;
+}
+
+/* ENT — light gray */
+.source-tag--ent {
+  background-color: #f1f5f9;
+  color: #475569;
+  border-color: #e2e8f0;
+}
+
+/* Generic / fallback */
+.source-tag--generic {
+  background-color: var(--primary-light);
+  color: var(--primary);
+  border-color: #c2e8cb;
+}
+
+/* ─── Tag icon dot (small colored indicator) ─── */
+.source-tag__dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.source-tag--sop .source-tag__dot { background-color: #2b6e3f; }
+.source-tag--dev .source-tag__dot { background-color: #b91c1c; }
+.source-tag--capa .source-tag__dot { background-color: #92600a; }
+.source-tag--audit .source-tag__dot { background-color: #475569; }
+.source-tag--ent .source-tag__dot { background-color: #475569; }
+.source-tag--generic .source-tag__dot { background-color: var(--primary); }
+
+/* ─── Size variants ─── */
+.source-tag--sm {
+  font-size: 11px;
+  padding: 2px 8px;
+}
+
+.source-tag--lg {
+  font-size: 13px;
+  padding: 4px 12px;
+}

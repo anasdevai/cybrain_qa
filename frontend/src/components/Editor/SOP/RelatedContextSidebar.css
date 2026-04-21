@@ -1,0 +1,121 @@
+/* RelatedContextSidebar.css */
+
+.related-context-sidebar {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: #ffffff;
+  border-left: 1px solid var(--border-light);
+  overflow-y: auto;
+}
+
+.related-context-header {
+  padding: 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid var(--border-light);
+}
+
+.related-context-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: #1a1a1a;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+}
+
+.related-context-title svg {
+  color: var(--accent-green);
+}
+
+.add-link-btn {
+  font-size: 12px;
+  font-weight: 600;
+  background: var(--accent-green);
+  color: #ffffff;
+  padding: 6px 12px;
+  border-radius: 6px;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.related-context-content {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.context-section-header {
+  font-size: 12px;
+  font-weight: 700;
+  color: #4b5563;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.context-section-header svg {
+  color: var(--accent-green);
+}
+
+.context-items-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.context-item-card {
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  cursor: pointer;
+}
+
+.context-item-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: #111827;
+  line-height: 1.4;
+}
+
+.context-item-status {
+  font-size: 11px;
+  color: #6b7280;
+}
+
+.context-empty-text {
+  font-size: 12px;
+  color: #9ca3af;
+  font-style: italic;
+  padding-left: 4px;
+}
+
+@media (max-width: 1400px) {
+  .related-context-sidebar {
+    width: 280px;
+  }
+}
+
+@media (max-width: 1024px) {
+  .related-context-sidebar {
+    width: 100%;
+    border-left: none;
+    border-top: 1px solid rgba(0, 0, 0, 0.08);
+    height: auto;
+    max-height: 400px;
+  }
+}

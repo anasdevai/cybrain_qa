@@ -1,0 +1,188 @@
+/* ChatMessage.css — Individual chat message bubble (AI or user) */
+
+.chat-msg {
+  display: flex;
+  gap: 10px;
+  padding: 0 0 4px;
+  max-width: 100%;
+  animation: msg-fade-in 300ms ease;
+}
+
+@keyframes msg-fade-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ─── AI message (left aligned) ─── */
+.chat-msg--ai {
+  justify-content: flex-start;
+}
+
+.chat-msg--ai .chat-msg__avatar {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  color: #fff;
+  margin-top: 4px;
+}
+
+.chat-msg--ai .chat-msg__bubble {
+  background: #eaf4ee;
+  border: 1px solid #d7e6dd;
+  border-radius: 2px;
+  padding: 10px 12px;
+  color: var(--text-primary);
+  max-width: min(680px, 85%);
+  min-width: 0;
+}
+
+/* ─── User message (right aligned) ─── */
+.chat-msg--user {
+  justify-content: flex-end;
+}
+
+.chat-msg--user .chat-msg__avatar {
+  order: 1;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--gradient-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  margin-top: 4px;
+}
+
+.chat-msg--user .chat-msg__bubble {
+  background: #3d6b50;
+  color: #fff;
+  border-radius: 2px;
+  padding: 9px 12px;
+  max-width: min(560px, 75%);
+  min-width: 0;
+}
+
+/* ─── Message content ─── */
+.chat-msg__content {
+  font-size: 10px;
+  line-height: 1.55;
+}
+
+.chat-msg__content p {
+  margin: 0 0 8px;
+}
+
+.chat-msg__content p:last-child {
+  margin-bottom: 0;
+}
+
+.chat-msg__content ul {
+  margin: 8px 0;
+  padding-left: 20px;
+  list-style: disc;
+}
+
+.chat-msg__content li {
+  margin-bottom: 4px;
+  line-height: 1.6;
+}
+
+.chat-msg__content strong {
+  font-weight: 600;
+}
+
+/* ─── Tags inside message ─── */
+.chat-msg__tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 12px;
+}
+
+/* ─── Timestamp ─── */
+.chat-msg__wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.chat-msg__time {
+  font-size: 9px;
+  color: var(--text-muted);
+  padding: 0 4px;
+}
+
+.chat-msg--ai .chat-msg__time {
+  text-align: left;
+}
+
+.chat-msg--user .chat-msg__time {
+  text-align: right;
+}
+
+/* ─── Action buttons below AI messages ─── */
+.chat-msg__actions {
+  display: flex;
+  gap: 0;
+  margin-top: 6px;
+}
+
+.chat-msg__action-btn {
+  padding: 5px 10px;
+  font-size: 9px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  background: var(--bg-card);
+  border: 1px solid var(--border-light);
+  cursor: pointer;
+  transition: background var(--transition-fast), color var(--transition-fast);
+  font-family: var(--font-sans);
+}
+
+.chat-msg__action-btn:first-child {
+  border-radius: 6px 0 0 6px;
+}
+
+.chat-msg__action-btn:last-child {
+  border-radius: 0 6px 6px 0;
+}
+
+.chat-msg__action-btn:not(:last-child) {
+  border-right: none;
+}
+
+.chat-msg__action-btn:hover {
+  background: var(--primary-light);
+  color: var(--primary);
+}
+
+/* ─── Responsive ─── */
+@media (max-width: 768px) {
+  .chat-msg--ai .chat-msg__bubble,
+  .chat-msg--user .chat-msg__bubble {
+    max-width: 85%;
+  }
+}
+
+@media (max-width: 480px) {
+  .chat-msg--ai .chat-msg__bubble,
+  .chat-msg--user .chat-msg__bubble {
+    max-width: 95%;
+    padding: 12px 14px;
+  }
+
+  .chat-msg--ai .chat-msg__avatar,
+  .chat-msg--user .chat-msg__avatar {
+    display: none;
+  }
+}

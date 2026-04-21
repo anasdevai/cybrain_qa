@@ -1,0 +1,73 @@
+/* FloatingAskAIButton.css — Floating toggle for AI widget drawer */
+
+.floating-ask-ai-btn {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background-color: var(--primary-color, #3E7B61);
+  color: #ffffff;
+  border: none;
+  border-radius: 999px;
+  padding: 12px 20px;
+  font-family: 'Inter', sans-serif;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(62, 123, 97, 0.3), 0 2px 4px rgba(0, 0, 0, 0.1);
+  transition: transform 0.2s ease, background-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.floating-ask-ai-btn:hover {
+  transform: translateY(-2px) scale(1.02);
+  background-color: #326550;
+  box-shadow: 0 6px 16px rgba(62, 123, 97, 0.4), 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.floating-ask-ai-btn:active {
+  transform: translateY(0) scale(0.98);
+  box-shadow: 0 2px 8px rgba(62, 123, 97, 0.3);
+}
+
+.floating-ask-ai-btn svg {
+  stroke-width: 2.5px;
+}
+
+/* Active state (drawer open) */
+.floating-ask-ai-btn--active {
+  background-color: #b91c1c;
+}
+
+.floating-ask-ai-btn--active:hover {
+  background-color: #991b1b;
+}
+
+/* ─── Hide on desktop where AI widget is always visible in grid ─── */
+/* Only show on screens ≤1023px (md and below) */
+@media (min-width: 1024px) {
+  .floating-ask-ai-btn {
+    display: none;
+  }
+}
+
+/* ─── Mobile adjustments ─── */
+@media (max-width: 639px) {
+  .floating-ask-ai-btn {
+    bottom: 16px;
+    right: 16px;
+    padding: 10px 16px;
+    font-size: 13px;
+  }
+}
+
+@media (max-width: 479px) {
+  .floating-ask-ai-btn {
+    bottom: 12px;
+    right: 12px;
+    padding: 10px 14px;
+    font-size: 12px;
+  }
+}

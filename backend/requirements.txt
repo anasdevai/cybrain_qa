@@ -1,0 +1,17 @@
+fastapi
+uvicorn
+sqlalchemy
+psycopg2-binary
+python-dotenv
+httpx
+python-jose
+passlib[bcrypt]
+email-validator
+langchain
+langchain-community
+langchain-google-genai
+qdrant-client
+sentence-transformers
+rank-bm25
+langchain-huggingface
+langchain-qdrant

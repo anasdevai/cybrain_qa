@@ -1,0 +1,80 @@
+.sop-data-table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+}
+
+.sop-data-table thead th {
+  padding: 16px 24px;
+  background-color: #F9FAFB;
+  font-size: 13px;
+  font-weight: 600;
+  color: rgba(32, 32, 32, 0.4);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+.sop-row {
+  transition: background-color 0.2s;
+  cursor: pointer;
+}
+
+.sop-row:hover {
+  background-color: #F9FAFB;
+}
+
+.sop-row td {
+  padding: 18px 24px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.03);
+  font-size: 14px;
+  color: #202020;
+}
+
+.title-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-weight: 600;
+}
+
+.file-icon {
+  width: 32px;
+  height: 32px;
+  background-color: rgba(53, 120, 86, 0.05);
+  color: #357856;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+
+
+.owner-avatar-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.owner-avatar-sm {
+  width: 24px;
+  height: 24px;
+  background-color: #E2E8F0;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: 700;
+  color: #64748B;
+}
+
+.row-action-btn {
+  color: rgba(32, 32, 32, 0.2);
+  transition: color 0.2s;
+}
+
+.sop-row:hover .row-action-btn {
+  color: #357856;
+}

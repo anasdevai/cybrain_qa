@@ -1,0 +1,369 @@
+/* Sidebar.css — Cybrain QS */
+
+.sidebar-container {
+  background-color: #ffffff;
+  border-right: 1px solid var(--border-light);
+  display: flex;
+  flex-direction: column;
+  padding: 16px 12px;
+  height: 100vh;
+  /* Let the grid column control width — do NOT set explicit width/min-width here */
+  width: 100%;
+  min-width: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+/* Mobile close button — hidden by default on desktop */
+.sidebar-close-btn {
+  display: none;
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 30px;
+  height: 30px;
+  border-radius: 6px;
+  background: var(--bg-main);
+  border: 1px solid var(--border-light);
+  color: var(--text-secondary);
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background var(--transition-fast);
+  z-index: 1;
+}
+
+.sidebar-close-btn:hover {
+  background: var(--border-light);
+}
+
+/* ─── Brand ─── */
+.sidebar-header {
+  padding: 20px 16px 24px;
+  flex-shrink: 0;
+}
+
+.sidebar-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0;
+}
+
+.sidebar-brand-icon {
+  display: none;
+  /* Hidden in actual design — no icon box shown */
+}
+
+.sidebar-container .brand-logo {
+  font-family: 'Inria Serif', serif;
+  font-size: 24px;
+  font-weight: 700;
+  font-style: italic;
+  color: var(--text-primary);
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+  margin: 0;
+  line-height: 1.2;
+  background: none;
+  width: auto;
+  height: auto;
+  display: block;
+  border-radius: 0;
+  justify-content: initial;
+}
+
+/* ─── Nav ─── */
+.sidebar-nav {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.nav-section {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.section-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: rgba(35, 127, 86, 0.50);
+  text-transform: none;
+  letter-spacing: 0;
+  padding: 4px 12px 4px;
+  margin-bottom: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.nav-link {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  border-radius: 6px;
+  color: var(--text-primary);
+  font-size: 14px;
+  font-weight: 500;
+  text-decoration: none;
+  border: none;
+  background: none;
+  cursor: pointer;
+  transition: background var(--transition-fast), color var(--transition-fast);
+  white-space: nowrap;
+  overflow: hidden;
+  position: relative;
+  min-width: 0;
+  width: 100%;
+  justify-content: flex-start;
+}
+
+.nav-text {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: opacity var(--transition-fast);
+}
+
+.nav-link:hover {
+  background-color: var(--bg-main);
+  color: var(--text-primary);
+}
+
+.nav-link.active {
+  background: var(--primary);
+  color: #ffffff;
+  font-weight: 600;
+  box-shadow: 0 2px 8px rgba(53, 120, 86, 0.2);
+}
+
+.nav-link.active svg {
+  color: #ffffff;
+}
+
+.nav-link.active .nav-badge {
+  background: rgba(255, 255, 255, 0.3);
+  color: #fff;
+}
+
+/* KI fragen special accent */
+.nav-link-ki {
+  color: var(--primary);
+}
+
+.nav-link-ki:hover {
+  background: var(--primary-light);
+  color: var(--primary);
+}
+
+/* ─── Badges ─── */
+.nav-badge {
+  margin-left: auto;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: var(--radius-full);
+  font-size: 11px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: opacity var(--transition-fast);
+}
+
+.nav-badge.blue {
+  background: #DBEAFE;
+  color: #1E40AF;
+}
+
+.nav-badge.red {
+  background: #FEE2E2;
+  color: #B91C1C;
+}
+
+/* ─── Footer ─── */
+.sidebar-footer {
+  border-top: 1px solid rgba(35, 127, 86, 0.30);
+  padding-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.logout-btn {
+  width: 100%;
+  border: none;
+  background: none;
+  cursor: pointer;
+  text-align: left;
+  font-family: inherit;
+  color: var(--error);
+}
+
+.logout-btn:hover {
+  background: #FEF2F2;
+  color: var(--error);
+}
+
+/* ═══════════════════════════════════════════════════════════
+   RESPONSIVE BREAKPOINTS
+   ═══════════════════════════════════════════════════════════ */
+
+/* ─── Tablet: 80px icon-only mode (1024px ≤ width ≤ 1279px) ─── */
+@media (max-width: 1279px) and (min-width: 1024px) {
+  .sidebar-container {
+    padding: 20px 4px;
+    align-items: center;
+  }
+
+  .sidebar-header {
+    width: 100%;
+    display: flex;
+    justify-content: center;
+    padding-bottom: 20px;
+  }
+
+  .sidebar-brand {
+    padding: 4px;
+    justify-content: center;
+    gap: 0;
+  }
+
+  /* Hide text labels in icon-only mode */
+  .section-label,
+  .nav-text,
+  .nav-badge,
+  .brand-logo {
+    display: none;
+  }
+
+  /* Center icon in nav link */
+  .nav-link {
+    justify-content: center;
+    padding: 10px 0;
+    width: 100%;
+    gap: 0;
+    border-radius: 10px;
+  }
+
+  .nav-link svg {
+    flex-shrink: 0;
+  }
+
+  .sidebar-nav {
+    width: 100%;
+    gap: 16px;
+    align-items: center;
+  }
+
+  .nav-section {
+    width: 100%;
+    align-items: center;
+    gap: 2px;
+  }
+
+  .sidebar-footer {
+    width: 100%;
+    align-items: center;
+  }
+
+  .logout-btn {
+    width: auto;
+    padding: 10px 0;
+    justify-content: center;
+  }
+}
+
+/* ─── Mobile drawer (≤1023px) ─── */
+@media (max-width: 1023px) {
+  .sidebar-container {
+    /* Take it out of the grid — render as a fixed off-screen drawer */
+    position: fixed;
+    left: 0;
+    top: 0;
+    height: 100dvh;
+    width: 260px;
+    min-width: 260px;
+    z-index: 300;
+    transform: translateX(-100%);
+    transition: transform 260ms cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 4px 0 24px rgba(0, 0, 0, 0.12);
+    /* Restore normal sidebar layout */
+    padding: 20px 12px;
+    align-items: stretch;
+  }
+
+  /* Open state */
+  .sidebar-container.sidebar-open {
+    transform: translateX(0);
+  }
+
+  /* Show close button */
+  .sidebar-close-btn {
+    display: flex;
+  }
+
+  /* Restore full labels */
+  .brand-logo,
+  .section-label,
+  .nav-text,
+  .nav-badge {
+    display: initial;
+  }
+
+  .nav-link {
+    justify-content: flex-start;
+    padding: 9px 10px;
+    gap: 10px;
+    width: 100%;
+  }
+
+  .nav-badge {
+    display: flex;
+  }
+
+  .sidebar-brand {
+    padding: 4px 8px;
+    gap: 9px;
+    justify-content: flex-start;
+  }
+
+  .sidebar-header {
+    display: block;
+    width: 100%;
+    padding-top: 40px; /* Important: Create space for absolute positioned close btn */
+    padding-bottom: 24px;
+  }
+
+  .sidebar-nav {
+    gap: 24px;
+    align-items: stretch;
+  }
+
+  .nav-section {
+    align-items: stretch;
+  }
+
+  .sidebar-footer {
+    align-items: stretch;
+  }
+
+  .logout-btn {
+    width: 100%;
+    text-align: left;
+  }
+}
+
+/* ─── Very small mobile ─── */
+@media (max-width: 480px) {
+  .sidebar-container {
+    width: 240px;
+    min-width: 240px;
+  }
+}

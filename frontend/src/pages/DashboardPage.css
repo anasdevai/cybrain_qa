@@ -1,0 +1,47 @@
+/* DashboardPage.css */
+
+.dashboard-page-container {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-height: 0;
+  min-width: 0;
+}
+
+.dashboard-content-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+  min-height: 0;
+  min-width: 0;
+}
+
+/* In this app shell, center content is already reduced by left/right panes.
+   Collapse earlier to prevent clipping in the start view cards. */
+@media (max-width: 1500px) {
+  .dashboard-content-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Mobile: reduce gap */
+@media (max-width: 768px) {
+  .dashboard-page-container {
+    gap: 12px;
+  }
+
+  .dashboard-content-grid {
+    gap: 12px;
+  }
+}
+
+@media (max-width: 480px) {
+  .dashboard-page-container {
+    gap: 10px;
+  }
+
+  .dashboard-content-grid {
+    gap: 10px;
+  }
+}

@@ -1,0 +1,126 @@
+/* MenuBar.css - Modern Horizontal Toolbar */
+
+.editor-menubar-shell {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  padding: 10px 0;
+  background: transparent;
+  display: flex;
+  justify-content: center;
+  width: 100%;
+}
+
+.editor-menubar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #ffffff;
+  border: none; /* Border handled by .secondary-toolbar container */
+  padding: 0 16px;
+  width: 100%;
+  height: 100%;
+}
+
+.editor-menubar-section {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+/* Paragraph Select */
+.editor-select-main {
+  appearance: none;
+  background: #f3f4f6;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  padding: 0 28px 0 12px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-main);
+  cursor: pointer;
+  height: 32px;
+  transition: all 0.2s ease;
+}
+
+.editor-select-main:hover {
+  background: #e5e7eb;
+}
+
+/* Toolbar Buttons */
+.editor-toolbar-chipset {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.editor-icon-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-secondary);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.editor-icon-btn:hover {
+  background: #f3f4f6;
+  color: var(--text-main);
+}
+
+.editor-icon-btn.active {
+  background: #e5e7eb;
+  color: var(--text-main);
+}
+
+.editor-divider {
+  width: 1px;
+  height: 20px;
+  background: #e5e7eb;
+  margin: 0 4px;
+}
+
+/* Secondary Actions (Right Side) */
+.menubar-right-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.menubar-outline-btn {
+  height: 32px;
+  padding: 0 12px;
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-main);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.menubar-outline-btn:hover {
+  background: #f9fafb;
+  border-color: #d1d5db;
+}
+
+.editor-toolbar-pill:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Responsiveness */
+@media (max-width: 1100px) {
+  .formatting-section {
+    display: none;
+  }
+}

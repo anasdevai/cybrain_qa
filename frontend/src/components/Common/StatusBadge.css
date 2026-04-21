@@ -1,0 +1,50 @@
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: var(--radius-sm, 6px);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
+/* Semantic colors */
+.status-error,
+.status-offen,
+.status-dringend {
+  background-color: #FEE2E2;
+  color: #B91C1C;
+}
+
+.status-success,
+.status-released,
+.status-freigegeben,
+.status-abgeschlossen {
+  background-color: #D1FAE5;
+  color: #065F46;
+}
+
+.status-primary,
+.status-in-review,
+.status-in-prüfung,
+.status-pruefung {
+  background-color: #DBEAFE;
+  color: #1E40AF;
+}
+
+.status-warning,
+.status-changes-requested,
+.status-pending {
+  background-color: #FEF3C7;
+  color: #92400E;
+}
+
+.status-muted,
+.status-draft,
+.status-entwurf {
+  background-color: #F3F4F6;
+  color: #4B5563;
+  border: 1px solid rgba(0, 0, 0, 0.05);
+}
