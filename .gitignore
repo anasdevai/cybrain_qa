@@ -33,3 +33,13 @@ build/
 
 # Logs
 *.log
+
+# Scripts with credentials
+chatbot/ingestion/_check_and_sync.py
+chatbot/ingestion/_upload_webhooks.py
+scripts/_deploy_patch.py
+scripts/_hotfix.py
+scripts/_rebuild.py
+
+# Test/Scratch scripts
+scratch/
