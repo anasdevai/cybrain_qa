@@ -1,0 +1,335 @@
+/* ============================================================
+   SideBySideViewer – Final Mobile Scroll Fix
+============================================================ */
+
+.sbs-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.95);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 10000;
+    overflow: hidden;
+}
+
+.sbs-modal {
+    width: 100%;
+    height: 100dvh;
+    background: #fff;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+/* HEADER */
+.sbs-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 14px;
+    background: #f8fafc;
+    border-bottom: 1px solid #e2e8f0;
+    flex-shrink: 0;
+    min-width: 0;
+}
+
+.sbs-header h2 {
+    margin: 0;
+    font-size: 1rem;
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    align-items: center;
+    min-width: 0;
+    word-break: break-word;
+}
+
+.sbs-badge {
+    padding: 3px 8px;
+    border-radius: 6px;
+    font-size: 0.8rem;
+    font-weight: 600;
+}
+
+.sbs-badge.old {
+    background: #fee2e2;
+    color: #991b1b;
+}
+
+.sbs-badge.new {
+    background: #dcfce7;
+    color: #166534;
+}
+
+.sbs-close {
+    background: transparent;
+    border: none;
+    font-size: 24px;
+    color: #64748b;
+    cursor: pointer;
+    line-height: 1;
+}
+
+/* BODY */
+.sbs-body {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    overflow: hidden;
+}
+
+/* PANELS */
+.sbs-panel {
+    flex: 1 1 0;
+    min-width: 0;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    background: #f8fafc;
+}
+
+.sbs-panel+.sbs-panel {
+    border-left: 1px solid #e2e8f0;
+}
+
+.sbs-panel-title {
+    flex-shrink: 0;
+    padding: 8px 12px;
+    font-size: 10px;
+    font-weight: 800;
+    text-transform: uppercase;
+    color: #64748b;
+    background: #f1f5f9;
+    border-bottom: 1px solid #e2e8f0;
+}
+
+/* CONTENT */
+.sbs-content {
+    flex: 1;
+    min-height: 0;
+    height: 100%;
+    overflow-y: auto;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    padding: 8px;
+    background: #f8fafc;
+}
+
+.sbs-content.read-only {
+    outline: none !important;
+}
+
+.sbs-content.read-only [block-id]::before {
+    display: none !important;
+}
+
+.sbs-content.read-only [block-id] {
+    border-left: none !important;
+    padding-left: 0 !important;
+    margin-bottom: 1em !important;
+}
+
+/* IMPORTANT: inner wrapper should not trap height */
+.sbs-content .diff-doc {
+    display: block;
+    min-height: auto !important;
+    height: auto !important;
+    padding: 0;
+    margin: 0;
+    background: transparent;
+    border: none;
+    border-radius: 0;
+}
+
+/* spacing */
+.sbs-content .diff-doc>* {
+    margin-bottom: 10px;
+}
+
+.sbs-content .diff-doc>*:first-child {
+    margin-top: 0 !important;
+}
+
+.sbs-content .diff-doc>*:last-child {
+    margin-bottom: 0 !important;
+}
+
+/* type */
+.sbs-content h1,
+.sbs-content h2,
+.sbs-content h3 {
+    margin-top: 0;
+    line-height: 1.2;
+    color: #0f172a;
+}
+
+.sbs-content p,
+.sbs-content li {
+    line-height: 1.5;
+}
+
+/* tables */
+.sbs-content table {
+    display: block;
+    width: 100%;
+    max-width: 100%;
+    overflow-x: auto;
+    border-collapse: collapse;
+    white-space: nowrap;
+}
+
+.sbs-content th,
+.sbs-content td {
+    min-width: 58px;
+    padding: 4px 6px;
+    font-size: 11px;
+    border: 1px solid #cbd5e1;
+    vertical-align: top;
+}
+
+/* diff colors */
+.diff-added {
+    background: #f0fdf4 !important;
+    border-left: 3px solid #22c55e !important;
+}
+
+.diff-removed {
+    background: #fef2f2 !important;
+    border-left: 3px solid #ef4444 !important;
+    text-decoration: line-through;
+    color: #991b1b;
+}
+
+
+.diff-word-added {
+    background: #dcfce7;
+}
+
+.diff-word-removed {
+    background: #fee2e2;
+    text-decoration: line-through;
+}
+
+/* desktop */
+@media (min-width: 769px) {
+    .sbs-overlay {
+        padding: 30px;
+    }
+
+    .sbs-modal {
+        max-width: 1400px;
+        height: 90vh;
+        border-radius: 16px;
+        box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+    }
+
+    .sbs-body {
+        flex-direction: row;
+    }
+
+    .sbs-content {
+        padding: 18px;
+    }
+
+    .sbs-content th,
+    .sbs-content td {
+        min-width: 70px;
+        font-size: 13px;
+        padding: 6px 8px;
+    }
+}
+
+/* mobile */
+@media (max-width: 768px) {
+    .sbs-overlay {
+        padding: 0;
+    }
+
+    .sbs-modal {
+        height: 100dvh;
+        max-height: 100dvh;
+        border-radius: 0;
+    }
+
+    .sbs-header {
+        padding: 8px 12px;
+    }
+
+    .sbs-header h2 {
+        font-size: 0.85rem;
+    }
+
+    .sbs-body {
+        flex-direction: column;
+        min-height: 0;
+        height: calc(100dvh - 44px);
+        overflow: hidden;
+    }
+
+    .sbs-panel {
+        flex: 1 1 0;
+        min-height: 0;
+        overflow: hidden;
+    }
+
+    .sbs-panel+.sbs-panel {
+        border-left: none;
+        border-top: 1px solid #e2e8f0;
+    }
+
+    .sbs-panel-title {
+        padding: 6px 10px;
+        font-size: 9px;
+    }
+
+    .sbs-content,
+    .sbs-content.tiptap {
+        min-height: 0 !important;
+        height: 100%;
+        overflow-y: auto;
+        overflow-x: auto;
+        padding: 8px !important;
+        font-size: 12px;
+    }
+}
+
+/* extra-small phones */
+@media (max-width: 390px) {
+    .sbs-header {
+        padding: 6px 10px;
+    }
+
+    .sbs-header h2 {
+        font-size: 0.75rem;
+        gap: 4px;
+    }
+
+    .sbs-badge {
+        font-size: 0.65rem;
+        padding: 2px 5px;
+    }
+
+    .sbs-close {
+        font-size: 20px;
+    }
+
+    .sbs-panel-title {
+        padding: 4px 8px;
+        font-size: 8px;
+    }
+
+    .sbs-content,
+    .sbs-content.tiptap {
+        padding: 6px !important;
+        font-size: 11px;
+    }
+
+    .sbs-content th,
+    .sbs-content td {
+        min-width: 40px;
+        padding: 3px 4px;
+        font-size: 10px;
+    }
+}
