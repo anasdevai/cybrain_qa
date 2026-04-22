@@ -21,8 +21,8 @@ from langchain_core.documents import Document
 from langchain_qdrant import QdrantVectorStore
 from qdrant_client import QdrantClient
 
-from backend.retrieval.hybrid_retriever import HybridRetriever
-from backend.retrieval.reranker import CrossEncoderReranker
+from retrieval.hybrid_retriever import HybridRetriever
+from retrieval.reranker import CrossEncoderReranker
 
 
 # Number of top results kept per section after reranking

@@ -11,7 +11,10 @@ from fastapi import HTTPException
 from langchain_core.documents import Document
 from pydantic import ValidationError
 
-from backend.schemas.sop_actions import ConvertResponse
+from schemas.sop_actions import ConvertResponse
+
+
+ACTION_CONTEXT_EXCERPT_CHARS = 350
 
 
 def utc_now_iso() -> str:
@@ -114,7 +117,7 @@ def format_chunks(chunks: list[Document]) -> str:
             or metadata.get("sop_number")
             or f"Source {index}"
         )
-        excerpt = chunk.page_content[:700].strip()
+        excerpt = chunk.page_content[:ACTION_CONTEXT_EXCERPT_CHARS].strip()
         formatted.append(f"[{source}]\n{excerpt}")
     return "\n\n".join(formatted)
 

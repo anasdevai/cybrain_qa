@@ -9,10 +9,10 @@ from fastapi import APIRouter, HTTPException
 from sqlalchemy import or_
 from langchain_core.output_parsers import StrOutputParser
 
-from backend.action.prompts import build_gap_check_prompt, build_improve_prompt, build_rewrite_prompt
-from backend.action.runtime import create_action_runtime
-from backend.action.utils import format_chunks, parse_with_retry
-from backend.schemas.sop_actions import ActionRequest, GapCheckResponse, ImproveResponse, RewriteResponse
+from action.prompts import build_gap_check_prompt, build_improve_prompt, build_rewrite_prompt
+from action.runtime import create_action_runtime
+from action.utils import format_chunks, parse_with_retry
+from schemas.sop_actions import ActionRequest, GapCheckResponse, ImproveResponse, RewriteResponse
 from .schemas import AIActionRequest, AIActionResponse
 from .database import SessionLocal
 from .models import SOP, SOPVersion, Deviation, Capa, AuditFinding, Decision
@@ -646,11 +646,22 @@ def _build_action_request(payload: AIActionRequest) -> ActionRequest:
     )
 
 
+def _build_gap_check_retrieval_query(request: ActionRequest) -> str:
+    parts = [
+        f"SOP: {request.sop_title}",
+        f"Section: {request.section_title}",
+        f"Type: {request.section_type}",
+        request.section_text,
+    ]
+    return "\n".join(part.strip() for part in parts if part and part.strip())
+
+
 def _run_dynamic_ai_action(payload: AIActionRequest, action: str) -> AIActionResponse:
     runtime = _get_action_runtime()
     request = _build_action_request(payload)
-    raw_docs = runtime.retriever.invoke(request.section_text)
-    reranked = runtime.reranker.rerank_top_n(request.section_text, raw_docs, 4)
+    retrieval_query = _build_gap_check_retrieval_query(request) if action == "gap_check" else request.section_text
+    raw_docs = runtime.retriever.invoke(retrieval_query)
+    reranked = runtime.reranker.rerank_top_n(retrieval_query, raw_docs, 3)
     context = format_chunks(reranked)
 
     if action == "improve":

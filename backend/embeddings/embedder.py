@@ -42,9 +42,9 @@ def get_embedder() -> HuggingFaceEmbeddings:
     local_only = _is_model_cached(cache_dir, MODEL_NAME)
     return HuggingFaceEmbeddings(
         model_name=MODEL_NAME,
+        cache_folder=cache_dir,
         model_kwargs={
             "device": "cpu",
-            "cache_folder": cache_dir,
             "local_files_only": local_only,
         },
         encode_kwargs={

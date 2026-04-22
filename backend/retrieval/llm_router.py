@@ -5,7 +5,7 @@ from typing import Dict, List, Optional
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
-from backend.retrieval.query_router import route_query
+from retrieval.query_router import route_query
 
 ROUTER_PROMPT_TEMPLATE = """\
 Given this user query, classify it for Qdrant retrieval routing.
@@ -23,7 +23,7 @@ Return this exact JSON structure:
 
 Field definitions:
 
-"collections" → array, one or more of: "sops", "deviations", "sop_versions", "capas", "audits", "decisions"
+"collections" → array, one or more of: "sops", "deviations", "capas", "audits", "decisions"
 "exact_filters" → object with any of these keys (omit key if not applicable):
   {{
     "sop_number":        "SOP-IT-001",   // if user mentions exact SOP ID
@@ -44,7 +44,7 @@ Routing rules (apply in order):
   1. Query mentions "SOP-" prefix        → collections must include "sops"
   2. Query mentions "DEV-" prefix        → collections must include "deviations"
   3. Query asks about "version", "what does it say", "content of"
-                                         → include "sop_versions"
+                                         → include "sops"
   4. Query asks "which deviation relates to SOP-X"
                                          → collections: ["sops", "deviations"]
   5. Query asks "all open deviations"    → exact_filters: {{ "external_status": "open" }}
@@ -63,6 +63,7 @@ class LLMRouter:
             self.llm = ChatGoogleGenerativeAI(
                 model=os.getenv("GEMINI_MODEL", "gemini-2.5-flash"),
                 temperature=0.0, # Zero temperature for precise classification
+                max_output_tokens=int(os.getenv("GEMINI_ROUTER_MAX_OUTPUT_TOKENS", "256")),
                 google_api_key=os.getenv("GOOGLE_API_KEY"),
                 max_retries=3,
             )
@@ -75,7 +76,11 @@ class LLMRouter:
         Routes the query using LLM and returns a dictionary with collections and filters.
         """
         try:
-            response_text = self.chain.invoke({"user_question": query})
+            limited_query = (query or "").strip()
+            max_query_chars = int(os.getenv("GEMINI_ROUTER_MAX_QUERY_CHARS", "2000"))
+            if max_query_chars > 0 and len(limited_query) > max_query_chars:
+                limited_query = limited_query[: max_query_chars - 1].rstrip() + "…"
+            response_text = self.chain.invoke({"user_question": limited_query})
             # Clean up potential markdown formatting if LLM ignores the "No markdown" instruction
             if "```json" in response_text:
                 response_text = response_text.split("```json")[1].split("```")[0].strip()

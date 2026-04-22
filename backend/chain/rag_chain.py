@@ -19,16 +19,29 @@ from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.documents import Document
 
-from backend.retrieval.hybrid_retriever import HybridRetriever
-from backend.retrieval.reranker import CrossEncoderReranker
-from backend.retrieval.context_builder import build_context
-from backend.retrieval.federated_retriever import FederatedRetriever
-from backend.retrieval.query_router import route_query, describe_route
-from backend.retrieval.llm_router import LLMRouter
+from retrieval.hybrid_retriever import HybridRetriever
+from retrieval.reranker import CrossEncoderReranker
+from retrieval.context_builder import build_context
+from retrieval.federated_retriever import FederatedRetriever
+from retrieval.query_router import route_query, describe_route
+from retrieval.llm_router import LLMRouter
 import os
 from dotenv import load_dotenv
 
 load_dotenv(Path(__file__).resolve().parents[2] / ".env", override=False)
+
+
+MAX_QUERY_CHARS = int(os.getenv("GEMINI_MAX_QUERY_CHARS", "4000"))
+MAX_CONTEXT_CHARS = int(os.getenv("GEMINI_MAX_CONTEXT_CHARS", "12000"))
+MAX_HISTORY_MESSAGE_CHARS = int(os.getenv("GEMINI_MAX_HISTORY_MESSAGE_CHARS", "800"))
+MAX_HISTORY_MESSAGES = int(os.getenv("GEMINI_MAX_HISTORY_MESSAGES", "8"))
+
+
+def _truncate_text(text: str, limit: int) -> str:
+    text = (text or "").strip()
+    if limit <= 0 or len(text) <= limit:
+        return text
+    return text[: max(limit - 1, 0)].rstrip() + "…"
 
 
 # ─────────────────────────────────────────────
@@ -96,107 +109,109 @@ SMART_SYSTEM = """\
 You are a precise, bilingual QMS/IT Compliance AI Assistant integrated with a
 production Hybrid RAG system.
 
-You have access to a structured Qdrant vector database with the following SEPARATE
-collections. You MUST search the correct collection based on the user's intent:
+You have access to a structured Qdrant vector database with the following
+separate collections. You must use the correct collection based on the user's
+intent and the routed retrieval results.
 
-═══════════════════════════════════════════════════════════════
+================================================================
 COLLECTION MAP
-═══════════════════════════════════════════════════════════════
+================================================================
 
 Collection: "sops"
-  → Contains : Standard Operating Procedures (SOPs)
-  → Fields   : sop_number, title, department, sop_content,
-                version_number, effective_date, review_date, status
-  → Trigger keywords: "SOP", "procedure", "standard", "policy",
-    "how to", "zugriffsmanagement", "patch", "firewall", "notfall",
-    "KI-Systeme", "governance"
+  -> Contains: Standard Operating Procedures (SOPs)
+  -> Common fields: sop_number, title, department, status, content,
+     current_version, version_number, effective_date, review_date
+  -> Typical triggers: "SOP", "procedure", "policy", "how to",
+     "zugriffsmanagement", "patch", "firewall", "notfall",
+     "KI-Systeme", "governance"
 
 Collection: "deviations"
-  → Contains : Deviation records and incidents
-  → Fields   : deviation_number, title, description_text,
-                root_cause_text, impact_level, external_status, event_date
-  → Trigger keywords: "deviation", "incident", "issue", "problem",
-    "DEV-", "breach", "excursion", "fehler", "abweichung", "kritisch"
-
-Collection: "sop_versions"
-  → Contains : Specific version content of SOPs
-  → Fields   : version_number, content_json, effective_date,
-                review_date, external_version_id, external_status
-  → Trigger keywords: "version", "current version", "v4", "effective",
-    "latest revision", "content of", "what does SOP say"
+  -> Contains: Deviation records and incidents
+  -> Common fields: deviation_number, title, description_text,
+     root_cause_text, impact_level, external_status, event_date
+  -> Typical triggers: "deviation", "incident", "issue", "problem",
+     "DEV-", "breach", "excursion", "fehler", "abweichung", "kritisch"
 
 Collection: "capas"
-  → Contains : Corrective and Preventive Actions
+  -> Contains: Corrective and Preventive Actions
+  -> Common fields: capa_number, title, action_text, external_status
+  -> Typical triggers: "CAPA", "corrective action", "preventive action"
+
 Collection: "audits"
-  → Contains : Audit findings
+  -> Contains: Audit findings
+  -> Common fields: audit_number, finding_number, finding_text,
+     acceptance_status
+  -> Typical triggers: "audit", "finding", "inspection"
+
 Collection: "decisions"
-  → Contains : Justifications and resolution
+  -> Contains: Decisions, rationales, and conclusions
+  -> Common fields: decision_number, title, decision_statement,
+     rationale_text, final_conclusion
+  -> Typical triggers: "decision", "rationale", "conclusion", "approval"
 
-═══════════════════════════════════════════════════════════════
+================================================================
 RULES YOU MUST ALWAYS FOLLOW
-═══════════════════════════════════════════════════════════════
+================================================================
 
-RULE 1 — COLLECTION ROUTING
-Before answering, explicitly identify which collection(s) to search.
-Never merge data from deviations into SOPs or vice versa unless the user
-explicitly asks for a cross-reference.
+RULE 1 - COLLECTION ROUTING
+Before answering, identify which collection or collections were searched.
+Do not merge facts from different collections unless the user explicitly asks
+for a comparison or cross-reference.
 
-RULE 2 — EXACT POINT MATCHING
-When the user mentions a specific identifier (e.g., "SOP-IT-001",
-"DEV-IT-401"), you MUST filter on that exact field value.
-Do not rely on semantic similarity alone.
+RULE 2 - EXACT IDENTIFIER MATCHING
+When the user mentions a specific identifier such as "SOP-IT-001",
+"DEV-IT-401", "CAPA-123", "AUDIT-22", or "DEC-77", prioritize exact record
+matching over semantic similarity. If an exact identifier is present, treat it
+as the highest-priority anchor for the answer.
 
-RULE 3 — CHAIN OF THOUGHT
-Before generating your final answer, you MUST perform and show a brief
-reasoning block tagged as [REASONING]. In this block:
-  (a) identify what the user is asking
-  (b) decide which collection to search
-  (c) identify any exact identifiers to filter on
-  (d) plan your answer structure
-Then produce your [ANSWER].
+RULE 3 - VISIBLE REASONING SUMMARY
+Before the final answer, provide a short [REASONING] block that states:
+  (a) what the user is asking
+  (b) which collection or collections were searched
+  (c) whether an exact identifier or prior-conversation reference was used
+  (d) how the answer will be structured
+Keep this brief and factual.
 
-RULE 4 — CITATIONS
-Every factual claim in your answer MUST be linked to its source record
-using this format: [SOP-IT-001], [DEV-IT-401], [SOP-QA-010 v4.0]
-Never state a fact without a citation tag.
-If you cannot cite it, do not state it.
+RULE 4 - CITATIONS
+Every factual claim must be backed by a citation tag such as
+[SOP-IT-001], [DEV-IT-401], [CAPA-22], [AUDIT-7], or [DEC-15].
+Do not state unsupported facts. If a claim cannot be cited from retrieved
+records, omit it.
 
-RULE 5 — CONVERSATION MEMORY
-You have access to the full conversation history. When the user says
-"that deviation", "the one we just discussed", "same SOP", "previous answer"
-— you MUST resolve the reference from earlier in the conversation history.
-Never ask the user to repeat what they already told you.
+RULE 5 - CONVERSATION MEMORY
+Use the conversation history to resolve references such as
+"that deviation", "the same SOP", "the previous answer", or
+"the one we just discussed". Do not ask the user to repeat information that
+is already clear from the conversation history.
 
-RULE 6 — IMPACT LEVEL AWARENESS
-When discussing deviations, always surface the impact_level in your answer.
-Priority order: Critical > Major > Moderate > Minor
-Flag Critical and Major deviations explicitly with a ⚠️ marker.
+RULE 6 - IMPACT AND STATUS AWARENESS
+When discussing deviations, always surface impact_level and current status.
+Highlight Critical and Major deviations with a warning marker.
+When discussing SOPs, CAPAs, audits, or decisions, report status only if the
+retrieved record actually provides it.
 
-RULE 7 — BILINGUAL HANDLING
-This system contains both German and English documents.
-If the user asks in English about a German SOP title, translate the intent
-correctly and search both languages.
-Return the answer in the same language the user asked in.
+RULE 7 - BILINGUAL HANDLING
+The knowledge base may contain both German and English content. Interpret the
+user's intent across both languages and answer in the same language the user
+used unless the user explicitly asks for translation.
 
-RULE 8 — STATUS AWARENESS
-Always report the current status of records:
-  - Deviations  : open | under_investigation | closed
-  - SOP versions: effective | draft | obsolete
-Never present a closed deviation or obsolete SOP version as currently active.
+RULE 8 - CROSS-REFERENCE DETECTION
+If the user asks about a deviation, CAPA, audit finding, or decision and the
+retrieved records clearly indicate a related SOP or related record, surface that
+link as a cross-reference. Use this format when relevant:
+[RELATED SOP: SOP-XX-XXX - title]
 
-RULE 9 — CROSS-REFERENCE DETECTION
-If the user asks about a deviation, check if a related SOP exists that
-governs that area.
-Example: DEV-IT-101 → SOP-IT-001 (OT access management)
-Proactively surface this link as: [RELATED SOP: SOP-IT-001]
+RULE 9 - MISSING DATA DISCIPLINE
+Never invent missing fields, dates, root causes, statuses, departments, or
+version details. If a field is null, absent, or not present in the retrieved
+records, say that it is not available in the current data.
 
-RULE 10 — REFUSAL RULE
+RULE 10 - REFUSAL RULE
 If the retrieved context does not contain enough information to answer
 confidently, say:
 "The available records do not contain sufficient detail to answer this
-question. Please check [collection name] or provide more context."
-Never hallucinate fields, dates, or root causes that are null or missing
-in the data.
+question. Please check the relevant collection or provide more context."
+Do not hallucinate.
 """
 
 SMART_USER = """\
@@ -205,64 +220,62 @@ SMART_USER = """\
 CONVERSATION HISTORY:
 (Loaded implicitly via message sequence)
 
-─────────────────────────────────────────
+----------------------------------------
 RETRIEVED CONTEXT:
 {context}
 
-─────────────────────────────────────────
+----------------------------------------
 USER QUESTION:
 {question}
 
-─────────────────────────────────────────
+----------------------------------------
 INSTRUCTIONS FOR THIS RESPONSE:
 
-STEP 1 — [REASONING]
-Answer each sub-question before writing your final answer:
-  • What is the user asking? (one sentence)
-  • Which collection did I search? Why?
-  • Did I apply any exact identifier filter? Which field and value?
-  • Did the user reference something from earlier in the conversation?
-    If yes, what exactly?
-  • What is the impact_level / status of the records involved?
-  • Are there any cross-collection links I should surface?
+STEP 1 - [REASONING]
+Answer these briefly before the final answer:
+  - What is the user asking?
+  - Which collection or collections were searched, and why?
+  - Did I use an exact identifier or a conversation-memory reference?
+  - What status, impact level, or version detail is relevant?
+  - Are there any cross-record links worth surfacing?
 
-STEP 2 — [ANSWER]
-  • Answer the question directly and completely.
-  • Cite every fact using bracket notation:
-    [SOP-IT-001], [DEV-IT-401], [DEV-2026-103]
-  • For deviations with impact_level Critical or Major, prepend ⚠️
-  • If a related SOP governs the deviation topic, add at the end:
-    [RELATED SOP: SOP-XX-XXX — title]
-  • If the question was about a specific version, include version number
-    and effective date in your citation:
-    [SOP-QA-010 v4.0 | effective: 2026-01-01]
+STEP 2 - [ANSWER]
+  - Answer directly and completely.
+  - Cite every factual claim with bracket notation:
+    [SOP-IT-001], [DEV-IT-401], [CAPA-22], [AUDIT-7], [DEC-15]
+  - For Critical or Major deviations, prepend a warning marker.
+  - If a related SOP clearly governs the topic, add:
+    [RELATED SOP: SOP-XX-XXX - title]
+  - If a question is about a version and the retrieved data provides version
+    information, include it in the citation when possible.
 
   Use this structure for complex answers:
-  ┌─ Summary    : one paragraph direct answer
-  ├─ Details    : bullet points with citations per fact
-  ├─ Status     : current status of the record(s)
-  └─ Cross-refs : related SOPs or deviations (if applicable)
+  Summary: one short paragraph
+  Details: concise bullets with citations
+  Status: current record state when available
+  Cross-refs: related SOPs, deviations, CAPAs, audits, or decisions
 
-STEP 3 — [CONFIDENCE]
-  State your confidence level for this answer:
-  • HIGH   — exact record found via identifier filter
-  • MEDIUM — semantic match found, recommend manual verification
-  • LOW    — insufficient data; refusal rule applies
+STEP 3 - [CONFIDENCE]
+State one of:
+  - HIGH: exact record found via identifier or unmistakable exact match
+  - MEDIUM: semantic match found, manual verification recommended
+  - LOW: insufficient data, refusal rule applies
 
-─────────────────────────────────────────
+----------------------------------------
 FORMAT RULES:
-  ✗ Never use vague language like "the document mentions..."
-    → Always name the exact record: [SOP-IT-001], [DEV-IT-401]
-  ✗ Never present null fields (root_cause_text: null) as if they have content
-  ✗ Never exceed 400 words unless the user explicitly asks for full detail
-  ✓ Always end with: 📎 Sources: [list every cited record ID]
+  - Never use vague wording like "the document mentions" when a record ID can
+    be named directly.
+  - Never present null or missing fields as populated.
+  - Keep the answer concise unless the user explicitly asks for full detail.
+  - Do not use Markdown headings, bold markers, tables, or code fences.
+  - Return clean plain text with simple labels and line breaks only.
+  - End with a Sources line listing every cited record ID.
 
-## REQUIRED SYSTEM PARSING BLOCKS (YOU MUST INCLUDE THESE AFTER YOUR ANSWER)
+## REQUIRED SYSTEM PARSING BLOCKS
 
 ---CITATIONS---
 [[REF_ID|Document Title|Type|One sentence excerpt]]
 [[REF_ID|Document Title|Type|One sentence excerpt]]
-(Put each citation on a NEW line starting with [[ and ending with ]]. Use '|' as separator. This section is for metadata only and will be parsed out.)
 
 ---SUGGESTIONS---
 ["Follow-up question 1 using doc IDs", "Follow-up question 2", "Follow-up question 3"]
@@ -276,7 +289,7 @@ def _build_unified_context(docs: List[Document], prefix_label: str) -> Tuple[str
 
     parts, raw_cits = [], []
     total = 0
-    MAX = 14000
+    MAX = MAX_CONTEXT_CHARS
 
     for i, doc in enumerate(docs):
         text = doc.page_content.strip()
@@ -413,25 +426,46 @@ def _is_sop_count_or_list_query(query: str, target_sections: List[str]) -> bool:
     return has_sop and (asks_count or asks_list)
 
 
-def _strict_sop_inventory_response(docs: List[Document], query: str) -> dict:
-    """Build deterministic SOP inventory response from retrieved docs only."""
+def _strict_sop_inventory_response(docs: List[Document], query: str, retriever: HybridRetriever | None = None) -> dict:
+    """Build deterministic SOP inventory response from the SOP corpus."""
+    inventory_docs = docs
+    if retriever is not None:
+        try:
+            corpus_docs, _ = retriever._get_bm25_corpus()
+            if corpus_docs:
+                inventory_docs = corpus_docs
+        except Exception:
+            inventory_docs = docs
+
     rows = []
     seen = set()
-    for doc in docs:
+    for doc in inventory_docs:
         meta = doc.metadata or {}
-        ref = meta.get("ref_number") or meta.get("source_id") or ""
+        ref = meta.get("ref_number") or meta.get("sop_number") or meta.get("source_id") or ""
         title = meta.get("title") or "Untitled SOP"
         status = meta.get("status") or "Unknown"
-        if not ref or ref in seen:
+        page_content = (doc.page_content or "").strip()
+
+        if not ref and page_content:
+            first_line = page_content.splitlines()[0].strip()
+            if " - " in first_line:
+                maybe_ref, maybe_title = first_line.split(" - ", 1)
+                if maybe_ref.strip():
+                    ref = maybe_ref.strip()
+                if maybe_title.strip() and title == "Untitled SOP":
+                    title = maybe_title.strip()
+
+        dedupe_key = ref or title
+        if dedupe_key in seen:
             continue
-        seen.add(ref)
-        rows.append((ref, title, status))
+        seen.add(dedupe_key)
+        rows.append((ref or title, title, status))
 
     rows = sorted(rows, key=lambda x: x[0])
     total = len(rows)
-    key_points = "\n".join([f"- {ref}: {title} [{status}]" for ref, title, status in rows[:20]])
-    sources_table = "\n".join(
-        [f"| {ref} | {title} | SOP | Inventory match |" for ref, title, _ in rows]
+    key_points = "\n".join([f"- {ref}: {title} [{status}]" for ref, title, status in rows])
+    sources_lines = "\n".join(
+        [f"- {ref}: {title} (SOP, Inventory match)" for ref, title, _ in rows]
     )
     citations = [{"ref": ref, "title": title, "type": "SOP", "excerpt": f"Status: {status}"} for ref, title, status in rows]
     suggestions = [
@@ -441,16 +475,12 @@ def _strict_sop_inventory_response(docs: List[Document], query: str) -> dict:
     ]
 
     answer = (
-        "### Direct Answer\n"
-        f"There are {total} SOPs in the indexed SOP dataset.\n\n"
-        "### Key Points\n"
+        f"Direct Answer:\nThere are {total} SOPs in the indexed SOP dataset.\n\n"
+        "Details:\n"
         f"{key_points if key_points else '- No SOPs found in the current index.'}\n\n"
-        "### Summary\n"
-        f"The SOP inventory currently contains {total} unique SOP records.\n\n"
-        "### Sources\n"
-        "| Document ID | Title | Type | Relevance |\n"
-        "|-------------|-------|------|-----------|\n"
-        f"{sources_table if sources_table else '| - | - | SOP | No records found |'}"
+        f"Summary:\nThe SOP inventory currently contains {total} unique SOP records.\n\n"
+        "Sources:\n"
+        f"{sources_lines if sources_lines else '- No records found.'}"
     )
 
     return {
@@ -600,7 +630,11 @@ class SmartRAGChain:
 
         # ── Strict deterministic path for SOP inventory queries ──
         if _is_sop_count_or_list_query(query, target_sections):
-            strict_resp = _strict_sop_inventory_response(all_docs, query)
+            strict_resp = _strict_sop_inventory_response(
+                all_docs,
+                query,
+                self.federated.retrievers.get("sops"),
+            )
             strict_resp["retrieval_stats"] = {
                 "searched": target_sections,
                 "per_section": per_section_counts,
@@ -620,13 +654,18 @@ class SmartRAGChain:
                 role = msg.get("role")
                 content = msg.get("content", "").strip()
                 if role == "assistant":
-                    if len(content) > 800:
-                        content = content[:800] + "…"
+                    content = _truncate_text(content, MAX_HISTORY_MESSAGE_CHARS)
                     chat_history_messages.append(AIMessage(content=content))
                 else:
+                    content = _truncate_text(content, MAX_HISTORY_MESSAGE_CHARS)
                     chat_history_messages.append(HumanMessage(content=content))
 
+            if len(chat_history_messages) > MAX_HISTORY_MESSAGES:
+                chat_history_messages = chat_history_messages[-MAX_HISTORY_MESSAGES:]
+
         # ── Step 4: LLM generation ──
+        query = _truncate_text(query, MAX_QUERY_CHARS)
+        context_str = _truncate_text(context_str, MAX_CONTEXT_CHARS)
         try:
             history_focus = f"HISTORY FOCUS: Priority should be given to {active_doc_id} as it was discussed recently." if active_doc_id else ""
             raw_answer = (self.prompt | self.llm | StrOutputParser()).invoke({

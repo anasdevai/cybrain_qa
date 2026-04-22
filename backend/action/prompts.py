@@ -3,7 +3,7 @@ Language priority: German (de). All other languages are fully supported.
 The AI always detects the language of the input text and responds in the same language.
 """
 
-from backend.schemas.sop_actions import ActionRequest, JustifyRequest
+from schemas.sop_actions import ActionRequest, JustifyRequest
 
 _LANGUAGE_RULE = """
 LANGUAGE RULE (MANDATORY):

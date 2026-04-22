@@ -1,9 +1,11 @@
+import threading
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from .database import Base, engine
 from .routes import router
 from .public_routes import public_router
-from .ai_routes import ai_router
+from .ai_routes import ai_router, CHATBOT_USE_LOCAL_DB, _get_smart_rag_chain
 from .auth_routes import router as auth_router
 from .chat_history_routes import router as chat_history_router
 
@@ -29,6 +31,20 @@ app.include_router(public_router)
 app.include_router(ai_router)
 app.include_router(chat_history_router)
 app.include_router(auth_router)
+
+
+@app.on_event("startup")
+def prewarm_rag_runtime() -> None:
+    if CHATBOT_USE_LOCAL_DB:
+        return
+
+    def _warm() -> None:
+        try:
+            _get_smart_rag_chain()
+        except Exception as exc:
+            print(f"[startup] RAG prewarm skipped: {exc}")
+
+    threading.Thread(target=_warm, daemon=True).start()
 
 
 @app.get("/", tags=["Root"])

@@ -10,7 +10,7 @@ from langchain_core.documents import Document
 from langchain_core.output_parsers import StrOutputParser
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.schemas.sop_actions import (
+from schemas.sop_actions import (
     ActionRequest,
     ActionResponseEnvelope,
     ConvertResponse,
@@ -23,7 +23,7 @@ from backend.schemas.sop_actions import (
 )
 from database.models import AISuggestion, User
 
-from backend.action.prompts import (
+from action.prompts import (
     build_convert_prompt,
     build_convert_retry_prompt,
     build_gap_check_prompt,
@@ -31,8 +31,8 @@ from backend.action.prompts import (
     build_justify_prompt,
     build_rewrite_prompt,
 )
-from backend.action.runtime import ActionRuntime
-from backend.action.utils import (
+from action.runtime import ActionRuntime
+from action.utils import (
     extract_source_titles,
     format_chunks,
     parse_with_retry,
@@ -53,6 +53,15 @@ class SOPActionService:
     def __init__(self, runtime: ActionRuntime):
         self.runtime = runtime
 
+    def _build_gap_check_retrieval_query(self, request: ActionRequest) -> str:
+        parts = [
+            f"SOP: {request.sop_title}",
+            f"Section: {request.section_title}",
+            f"Type: {request.section_type}",
+            request.section_text,
+        ]
+        return "\n".join(part.strip() for part in parts if part and part.strip())
+
     def _call_llm(self, prompt: str) -> str:
         parser = StrOutputParser()
         try:
@@ -60,25 +69,25 @@ class SOPActionService:
         except Exception:
             return (self.runtime.fallback_llm | parser).invoke(prompt)
 
-    def _retrieve_context(self, section_text: str, audit_log: list[dict[str, Any]]) -> tuple[list[Document], list[float]]:
-        query_vector = self.runtime.embedder.embed_query(section_text)
-        audit_log.append(
-            {
-                "event": "embedding_generated",
-                "timestamp": utc_now_iso(),
-                "vector_size": len(query_vector),
-            }
-        )
-        raw_docs = self.runtime.retriever.invoke(section_text)
+    def _retrieve_context(
+        self,
+        section_text: str,
+        audit_log: list[dict[str, Any]],
+        *,
+        retrieval_query: str | None = None,
+    ) -> tuple[list[Document], list[float]]:
+        query_text = (retrieval_query or section_text).strip()
+        raw_docs = self.runtime.retriever.invoke(query_text)
         audit_log.append(
             {
                 "event": "hybrid_retrieval_completed",
                 "timestamp": utc_now_iso(),
                 "documents_retrieved": len(raw_docs),
                 "collection": self.runtime.collection_name,
+                "retrieval_query_preview": query_text[:220],
             }
         )
-        reranked = self.runtime.reranker.rerank_top_n(section_text, raw_docs, 4)
+        reranked = self.runtime.reranker.rerank_top_n(query_text, raw_docs, 3)
         audit_log.append(
             {
                 "event": "rerank_completed",
@@ -86,7 +95,7 @@ class SOPActionService:
                 "documents_reranked": len(reranked),
             }
         )
-        return reranked, query_vector
+        return reranked, []
 
     async def _save_suggestion(
         self,
@@ -135,7 +144,12 @@ class SOPActionService:
         current_user: User | None,
     ) -> ActionResponseEnvelope:
         audit_log: list[dict[str, Any]] = [{"event": "action_started", "timestamp": utc_now_iso(), "action": action_type}]
-        chunks, query_vector = self._retrieve_context(request.section_text, audit_log)
+        retrieval_query = self._build_gap_check_retrieval_query(request) if action_type == "gap_check" else request.section_text
+        chunks, query_vector = self._retrieve_context(
+            request.section_text,
+            audit_log,
+            retrieval_query=retrieval_query,
+        )
         related_documents = extract_source_titles(chunks)
         context = format_chunks(chunks)
         prompt = prompt_builder(request, context)
@@ -149,8 +163,10 @@ class SOPActionService:
             audit_log=audit_log,
         )
         metadata_snapshot = {
-            "query_vector_size": len(query_vector),
+            "query_vector_size": 0,
             "collection_name": self.runtime.collection_name,
+            "rag_mode": "hybrid",
+            "retrieval_query": retrieval_query[:500],
             "fusion_weights": {"dense": self.runtime.retriever.dense_weight, "bm25": self.runtime.retriever.bm25_weight},
             "reranker": "cross-encoder/ms-marco-MiniLM-L-6-v2",
             "llm_model": getattr(self.runtime.llm, "model", None),

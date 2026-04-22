@@ -7,13 +7,13 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from dotenv import load_dotenv
+from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_qdrant import QdrantVectorStore
 from qdrant_client import QdrantClient
 
-from backend.chain.rag_chain import get_fallback_llm, get_llm
-from backend.embeddings.embedder import get_embedder
-from backend.retrieval.hybrid_retriever import HybridRetriever
-from backend.retrieval.reranker import CrossEncoderReranker
+from embeddings.embedder import get_embedder
+from retrieval.hybrid_retriever import HybridRetriever
+from retrieval.reranker import CrossEncoderReranker
 
 load_dotenv(Path(__file__).resolve().parents[2] / ".env", override=False)
 
@@ -42,6 +42,28 @@ class _NoopReranker:
         return docs
 
 
+def _get_action_llm(temperature: float = 0.2) -> ChatGoogleGenerativeAI:
+    return ChatGoogleGenerativeAI(
+        model=os.getenv("GEMINI_ACTION_MODEL", os.getenv("GEMINI_MODEL", "gemini-2.5-flash")),
+        temperature=temperature,
+        max_output_tokens=int(os.getenv("GEMINI_ACTION_MAX_OUTPUT_TOKENS", os.getenv("GEMINI_MAX_OUTPUT_TOKENS", "768"))),
+        google_api_key=os.getenv("GOOGLE_API_KEY"),
+        max_retries=3,
+        thinking_budget=int(os.getenv("GEMINI_ACTION_THINKING_BUDGET", "128")),
+    )
+
+
+def _get_action_fallback_llm(temperature: float = 0.2) -> ChatGoogleGenerativeAI:
+    return ChatGoogleGenerativeAI(
+        model=os.getenv("GEMINI_ACTION_FALLBACK_MODEL", os.getenv("GEMINI_FALLBACK_MODEL", "gemini-1.5-flash")),
+        temperature=temperature,
+        max_output_tokens=int(os.getenv("GEMINI_ACTION_MAX_OUTPUT_TOKENS", os.getenv("GEMINI_MAX_OUTPUT_TOKENS", "768"))),
+        google_api_key=os.getenv("GOOGLE_API_KEY"),
+        max_retries=2,
+        thinking_budget=int(os.getenv("GEMINI_ACTION_FALLBACK_THINKING_BUDGET", "64")),
+    )
+
+
 def build_action_runtime(
     *,
     client: QdrantClient,
@@ -55,17 +77,17 @@ def build_action_runtime(
         vectorstore=vectorstore,
         client=client,
         collection_name=collection,
-        dense_top_k=20,
-        bm25_top_k=20,
-        final_top_k=8,
+        dense_top_k=int(os.getenv("ACTION_DENSE_TOP_K", "8")),
+        bm25_top_k=int(os.getenv("ACTION_BM25_TOP_K", "8")),
+        final_top_k=int(os.getenv("ACTION_FINAL_TOP_K", "4")),
     )
     return ActionRuntime(
         client=client,
         embedder=embedder,
         reranker=reranker,
         retriever=retriever,
-        llm=get_llm(),
-        fallback_llm=get_fallback_llm(),
+        llm=_get_action_llm(),
+        fallback_llm=_get_action_fallback_llm(),
         collection_name=collection,
     )
 
@@ -86,7 +108,7 @@ def create_action_runtime() -> ActionRuntime:
             embedder=None,
             reranker=_NoopReranker(),
             retriever=_NoContextRetriever(),
-            llm=get_llm(),
-            fallback_llm=get_fallback_llm(),
+            llm=_get_action_llm(),
+            fallback_llm=_get_action_fallback_llm(),
             collection_name=os.getenv("COLLECTION_SOPS", "docs_sops"),
         )
