@@ -5,7 +5,7 @@ from typing import Dict, List, Optional
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
-from retrieval.query_router import route_query
+from backend.retrieval.query_router import route_query
 
 ROUTER_PROMPT_TEMPLATE = """\
 Given this user query, classify it for Qdrant retrieval routing.

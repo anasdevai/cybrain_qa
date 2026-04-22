@@ -7,7 +7,12 @@ from typing import Any
 
 from fastapi import APIRouter, HTTPException
 from sqlalchemy import or_
+from langchain_core.output_parsers import StrOutputParser
 
+from backend.action.prompts import build_gap_check_prompt, build_improve_prompt, build_rewrite_prompt
+from backend.action.runtime import create_action_runtime
+from backend.action.utils import format_chunks, parse_with_retry
+from backend.schemas.sop_actions import ActionRequest, GapCheckResponse, ImproveResponse, RewriteResponse
 from .schemas import AIActionRequest, AIActionResponse
 from .database import SessionLocal
 from .models import SOP, SOPVersion, Deviation, Capa, AuditFinding, Decision
@@ -19,6 +24,8 @@ from .models import SOP, SOPVersion, Deviation, Capa, AuditFinding, Decision
 ai_router = APIRouter()
 _smart_rag_lock = threading.Lock()
 _smart_rag_chain = None
+_action_runtime_lock = threading.Lock()
+_action_runtime = None
 CHAT_QUERY_TIMEOUT_SECONDS = int(os.getenv("CHAT_QUERY_TIMEOUT_SECONDS", "25"))
 SOP_REF_PATTERN = re.compile(r"\bSOP-[A-Z0-9-]+\b", re.IGNORECASE)
 DEV_REF_PATTERN = re.compile(r"\bDEV-[A-Z0-9-]+\b", re.IGNORECASE)
@@ -86,6 +93,18 @@ def _normalize_action(action: str) -> str:
         "support": "improve",
     }
     return aliases.get(normalized, normalized)
+
+
+def _get_action_runtime() -> Any:
+    global _action_runtime
+    if _action_runtime is not None:
+        return _action_runtime
+
+    with _action_runtime_lock:
+        if _action_runtime is not None:
+            return _action_runtime
+        _action_runtime = create_action_runtime()
+        return _action_runtime
 
 
 def _clean_text(text: str) -> str:
@@ -503,31 +522,63 @@ def _build_context(payload: AIActionRequest) -> str:
     return " | ".join(bits) if bits else "SOP context unavailable"
 
 
+def _paragraph(text: str) -> str:
+    return f"<p>{escape(text)}</p>"
+
+
 def _build_prompt(action: str, payload: AIActionRequest) -> str:
     context = _build_context(payload)
     if action == "gap_check":
         return (
-            "Review the selected SOP text as a QA specialist. "
-            "Return only structured output with Issue, Explanation, Recommendation. "
-            f"Context: {context}. Text: {payload.text}"
+            "You are a Lead GMP/QA Compliance Auditor with expertise in ISO 9001:2015, ISO 13485:2016, "
+            "FDA 21 CFR Parts 11 and 820, and EU GMP Annex 11.\n\n"
+            f"DOCUMENT CONTEXT: {context}\n\n"
+            "YOUR TASK: Perform a thorough compliance gap analysis on the SOP text below. "
+            "Check for: (1) missing or incomplete procedure steps, (2) undefined responsibilities \u2014 "
+            "roles must be named specifically, (3) undefined frequencies or timelines \u2014 no vague terms like "
+            "'regularly' or 'as needed', (4) missing data integrity or access controls, (5) absent "
+            "documentation requirements including record names and retention periods, (6) ambiguous language "
+            "and undefined technical terms, (7) missing regulatory references where required.\n\n"
+            f"TEXT TO ANALYZE:\n{payload.text}\n\n"
+            "Return ONLY a valid JSON object structured as: "
+            '{"gaps": [{"issue": "short label", "explanation": "why this fails GMP/regulatory requirements", '
+            '"recommendation": "exact SOP-ready text to fix the gap"}], '
+            '"section_assessed": "section name"}'
         )
     if action == "rewrite":
         return (
-            "Rewrite the selected SOP text into a strict SOP format. "
-            "Return sections for Purpose, Scope, Responsibilities, Procedure (numbered), and Documentation. "
-            f"Context: {context}. Text: {payload.text}"
+            "You are a senior GMP/QA technical writer with expertise in ISO 13485, FDA 21 CFR, and EU GMP Annex 11.\n\n"
+            f"DOCUMENT CONTEXT: {context}\n\n"
+            "YOUR TASK: Perform a complete, professional rewrite of the SOP text below. Apply these standards: "
+            "(1) Use active voice and imperative verbs throughout. (2) Every sentence must name a specific role "
+            "as the subject \u2014 never 'someone' or 'the team'. (3) Replace all vague qualifiers with specific "
+            "values, frequencies, or defined conditions. (4) Ensure logical, chronological process order. "
+            "(5) Use parallel structure in lists. (6) Add critical step callouts where safety or compliance is at risk.\n"
+            "RULES: Do NOT add Purpose/Scope/Responsibilities/Procedure headings. Do NOT change the core topic. "
+            "You MAY restructure sentences and reorder information for flow.\n\n"
+            f"TEXT TO REWRITE:\n{payload.text}\n\n"
+            "Return ONLY a valid JSON object: "
+            '{"rewritten_text": "full rewritten text", '
+            '"structural_changes": ["change 1", "change 2"], '
+            '"rationale": "2-sentence explanation of compliance and clarity improvements"}'
         )
     if action == "improve":
         return (
-            "Improve the selected SOP text while preserving intent. "
-            "Return only an Improved version and a Reason for improvement. "
-            f"Context: {context}. Text: {payload.text}"
+            "You are a senior GMP/QA technical writer specializing in regulatory SOP documentation.\n\n"
+            f"DOCUMENT CONTEXT: {context}\n\n"
+            "YOUR TASK: Make targeted, high-quality improvements to the SOP text below. Apply these criteria: "
+            "(1) Fix all grammar, punctuation, and spelling errors. (2) Replace passive voice with active voice. "
+            "(3) Replace vague qualifiers ('appropriate', 'as needed') with specific, measurable language. "
+            "(4) Ensure responsibilities are attributed to named roles. (5) Make language imperative and unambiguous.\n"
+            "STRICT RULES: Do NOT add SOP headings or restructure into a full SOP. Do NOT change factual content or meaning. "
+            "Make only the smallest meaningful improvements required.\n\n"
+            f"TEXT TO IMPROVE:\n{payload.text}\n\n"
+            "Return ONLY a valid JSON object: "
+            '{"improved_text": "the improved text", '
+            '"changes_made": ["specific change 1", "specific change 2"], '
+            '"compliance_note": "one sentence explaining the GMP/quality improvement achieved"}'
         )
     raise HTTPException(status_code=400, detail=f"Action '{action}' is not supported.")
-
-
-def _paragraph(text: str) -> str:
-    return f"<p>{escape(text)}</p>"
 
 
 def _render_gap_check(structured_data: dict) -> str:
@@ -556,80 +607,182 @@ def _render_improve(structured_data: dict) -> str:
     )
 
 
+def _call_action_llm(runtime: Any, prompt: str) -> str:
+    parser = StrOutputParser()
+    try:
+        return (runtime.llm | parser).invoke(prompt)
+    except Exception:
+        return (runtime.fallback_llm | parser).invoke(prompt)
+
+
+def _render_dynamic_text(text: str) -> str:
+    lines = [line.strip() for line in re.split(r"\r?\n+", text or "") if line.strip()]
+    if not lines:
+        return "<p>No suggestion returned.</p>"
+    return "".join(f"<p>{escape(line)}</p>" for line in lines)
+
+
+def _render_dynamic_gap_check(gaps: list[dict[str, str]]) -> str:
+    if not gaps:
+        return "<p>No compliance gaps identified for the selected text.</p>"
+    return "".join(
+        (
+            f"<h3>Issue</h3>{_paragraph(gap.get('issue', ''))}"
+            f"<h3>Explanation</h3>{_paragraph(gap.get('explanation', ''))}"
+            f"<h3>Recommendation</h3>{_paragraph(gap.get('recommendation', ''))}"
+        )
+        for gap in gaps
+    )
+
+
+def _build_action_request(payload: AIActionRequest) -> ActionRequest:
+    return ActionRequest(
+        document_id=payload.sop_title or "editor-document",
+        section_id=(payload.section_name or "selected-text").lower().replace(" ", "-"),
+        sop_title=payload.sop_title or "Untitled SOP",
+        section_title=payload.section_name or "Selected text",
+        section_type=payload.section_type or "Selected Text",
+        section_text=payload.text,
+    )
+
+
+def _run_dynamic_ai_action(payload: AIActionRequest, action: str) -> AIActionResponse:
+    runtime = _get_action_runtime()
+    request = _build_action_request(payload)
+    raw_docs = runtime.retriever.invoke(request.section_text)
+    reranked = runtime.reranker.rerank_top_n(request.section_text, raw_docs, 4)
+    context = format_chunks(reranked)
+
+    if action == "improve":
+        prompt = build_improve_prompt(request, context)
+        parsed = parse_with_retry(
+            raw=_call_action_llm(runtime, prompt),
+            schema=ImproveResponse,
+            prompt=prompt,
+            call_llm=lambda retry_prompt: _call_action_llm(runtime, retry_prompt),
+            audit_log=[],
+        )
+        return AIActionResponse(
+            action="improve",
+            original_text=request.section_text,
+            suggested_text=_render_dynamic_text(parsed.improved_text),
+            explanation="Text verbessert / Text improved.",
+            structured_data={
+                "improved_text": parsed.improved_text,
+                "improved_version": parsed.improved_text,
+            },
+        )
+
+    if action == "rewrite":
+        prompt = build_rewrite_prompt(request, context)
+        parsed = parse_with_retry(
+            raw=_call_action_llm(runtime, prompt),
+            schema=RewriteResponse,
+            prompt=prompt,
+            call_llm=lambda retry_prompt: _call_action_llm(runtime, retry_prompt),
+            audit_log=[],
+        )
+        return AIActionResponse(
+            action="rewrite",
+            original_text=request.section_text,
+            suggested_text=_render_dynamic_text(parsed.rewritten_text),
+            explanation="Text neu formuliert / Text rewritten.",
+            structured_data={
+                "rewritten_text": parsed.rewritten_text,
+            },
+        )
+
+    if action == "gap_check":
+        prompt = build_gap_check_prompt(request, context)
+        parsed = parse_with_retry(
+            raw=_call_action_llm(runtime, prompt),
+            schema=GapCheckResponse,
+            prompt=prompt,
+            call_llm=lambda retry_prompt: _call_action_llm(runtime, retry_prompt),
+            audit_log=[],
+        )
+        return AIActionResponse(
+            action="gap_check",
+            original_text=request.section_text,
+            suggested_text=_render_dynamic_text(parsed.analysis),
+            explanation="Compliance-Lückenanalyse abgeschlossen / Compliance gap analysis completed.",
+            structured_data={
+                "analysis": parsed.analysis,
+            },
+        )
+
+    raise HTTPException(status_code=400, detail=f"Action '{action}' is not supported.")
+
+
 def _fallback_gap_check(payload: AIActionRequest) -> AIActionResponse:
-    selected = _clean_text(payload.text)
-    section_name = payload.section_name or "this section"
-    issue = f"{section_name} is missing QA-specific control detail"
-    explanation = (
-        f"The selected text describes the activity at a high level but does not define the control, "
-        f"acceptance criteria, ownership, or documentation expectations needed in {section_name}."
+    runtime = _get_action_runtime()
+    request = _build_action_request(payload)
+    prompt = build_gap_check_prompt(request, "Kein relevanter Kontext verfügbar. / No relevant context found.")
+    raw = _call_action_llm(runtime, prompt)
+    parsed = parse_with_retry(
+        raw=raw,
+        schema=GapCheckResponse,
+        prompt=prompt,
+        call_llm=lambda retry_prompt: _call_action_llm(runtime, retry_prompt),
+        audit_log=[],
     )
-    recommendation = (
-        f"Add explicit QA language for responsibilities, review criteria, and retained records in "
-        f"{section_name} for {payload.sop_title or 'the SOP'}."
-    )
-    structured_data = {
-        "issue": issue,
-        "explanation": explanation,
-        "recommendation": recommendation,
-        "prompt_used": _build_prompt("gap_check", payload),
-    }
     return AIActionResponse(
         action="gap_check",
-        original_text=selected,
-        suggested_text=_render_gap_check(structured_data),
-        explanation="Structured gap check generated with SOP and section context.",
-        structured_data=structured_data,
+        original_text=_clean_text(payload.text),
+        suggested_text=_render_dynamic_text(parsed.analysis),
+        explanation="Compliance-Lückenanalyse abgeschlossen / Compliance gap analysis completed.",
+        structured_data={"analysis": parsed.analysis},
     )
 
 
 def _fallback_rewrite(payload: AIActionRequest) -> AIActionResponse:
-    selected = _clean_text(payload.text)
-    sentences = _split_sentences(selected)
-    base = sentences[0] if sentences else selected or "Execute the defined SOP activity."
-    procedure = sentences[:3] if len(sentences) >= 3 else [
-        "Review the required inputs and verify they are complete.",
-        f"Perform the activity described in {payload.section_name or 'the selected section'} according to approved QA controls.",
-        "Document the outcome, approvals, and any exceptions in the designated record.",
-    ]
-    structured_data = {
-        "purpose": f"Define a controlled method for {base.rstrip('.')} within {payload.sop_title or 'this SOP'}.",
-        "scope": f"Applies to personnel executing or reviewing {payload.section_name or 'the selected process'}.",
-        "responsibilities": "The document owner maintains the procedure and trained personnel execute and document each step.",
-        "procedure": procedure,
-        "documentation": "Retain completed records, approvals, and supporting evidence according to the approved retention schedule.",
-        "prompt_used": _build_prompt("rewrite", payload),
-    }
+    runtime = _get_action_runtime()
+    request = _build_action_request(payload)
+    prompt = build_rewrite_prompt(request, "Kein relevanter Kontext verfügbar. / No relevant context found.")
+    raw = _call_action_llm(runtime, prompt)
+    parsed = parse_with_retry(
+        raw=raw,
+        schema=RewriteResponse,
+        prompt=prompt,
+        call_llm=lambda retry_prompt: _call_action_llm(runtime, retry_prompt),
+        audit_log=[],
+    )
     return AIActionResponse(
         action="rewrite",
-        original_text=selected,
-        suggested_text=_render_rewrite(structured_data),
-        explanation="Selected content was rewritten into the required SOP structure.",
-        structured_data=structured_data,
+        original_text=_clean_text(payload.text),
+        suggested_text=_render_dynamic_text(parsed.rewritten_text),
+        explanation="Text neu formuliert / Text rewritten.",
+        structured_data={"rewritten_text": parsed.rewritten_text},
     )
 
 
 def _fallback_improve(payload: AIActionRequest) -> AIActionResponse:
-    selected = _clean_text(payload.text)
-    improved = (
-        f"{selected} Ensure the responsible role verifies completion, records the result, "
-        "and escalates any deviation through the QA workflow."
-    ).strip()
-    structured_data = {
-        "improved_version": improved,
-        "reason_for_improvement": (
-            "The wording is more explicit about ownership, documentation, and deviation handling, "
-            "which makes the SOP section more audit-ready."
-        ),
-        "prompt_used": _build_prompt("improve", payload),
-    }
+    runtime = _get_action_runtime()
+    request = _build_action_request(payload)
+    prompt = build_improve_prompt(request, "Kein relevanter Kontext verfügbar. / No relevant context found.")
+    raw = _call_action_llm(runtime, prompt)
+    parsed = parse_with_retry(
+        raw=raw,
+        schema=ImproveResponse,
+        prompt=prompt,
+        call_llm=lambda retry_prompt: _call_action_llm(runtime, retry_prompt),
+        audit_log=[],
+    )
     return AIActionResponse(
         action="improve",
-        original_text=selected,
-        suggested_text=_render_improve(structured_data),
-        explanation="Selected content was strengthened for clarity and QA control.",
-        structured_data=structured_data,
+        original_text=_clean_text(payload.text),
+        suggested_text=_render_dynamic_text(parsed.improved_text),
+        explanation="Text verbessert / Text improved.",
+        structured_data={"improved_text": parsed.improved_text},
     )
+
+
+def _extract_selected_text_html(action: str, structured_data: dict, suggested_text: str) -> str:
+    if action == "rewrite":
+        return _render_dynamic_text(structured_data.get("rewritten_text") or suggested_text)
+    if action == "improve":
+        return _render_dynamic_text(structured_data.get("improved_text") or suggested_text)
+    return suggested_text
 
 
 @ai_router.post("/api/ai/action", response_model=AIActionResponse)
@@ -644,12 +797,17 @@ async def perform_ai_action(payload: AIActionRequest):
     if not payload.text:
         raise HTTPException(status_code=422, detail="Selected text is required.")
 
-    if action == "gap_check":
-        return _fallback_gap_check(payload)
-    if action == "rewrite":
-        return _fallback_rewrite(payload)
-    if action == "improve":
-        return _fallback_improve(payload)
+    try:
+        return await asyncio.to_thread(_run_dynamic_ai_action, payload, action)
+    except HTTPException:
+        raise
+    except Exception:
+        if action == "gap_check":
+            return _fallback_gap_check(payload)
+        if action == "rewrite":
+            return _fallback_rewrite(payload)
+        if action == "improve":
+            return _fallback_improve(payload)
 
     raise HTTPException(status_code=400, detail=f"Action '{payload.action}' is not supported.")
 

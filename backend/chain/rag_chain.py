@@ -10,6 +10,7 @@ Two chain classes:
 import time
 import re
 import json
+from pathlib import Path
 from typing import Dict, List, Tuple
 
 from langchain_google_genai import ChatGoogleGenerativeAI
@@ -18,13 +19,16 @@ from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.documents import Document
 
-from retrieval.hybrid_retriever import HybridRetriever
-from retrieval.reranker import CrossEncoderReranker
-from retrieval.context_builder import build_context
-from retrieval.federated_retriever import FederatedRetriever
-from retrieval.query_router import route_query, describe_route
-from retrieval.llm_router import LLMRouter
+from backend.retrieval.hybrid_retriever import HybridRetriever
+from backend.retrieval.reranker import CrossEncoderReranker
+from backend.retrieval.context_builder import build_context
+from backend.retrieval.federated_retriever import FederatedRetriever
+from backend.retrieval.query_router import route_query, describe_route
+from backend.retrieval.llm_router import LLMRouter
 import os
+from dotenv import load_dotenv
+
+load_dotenv(Path(__file__).resolve().parents[2] / ".env", override=False)
 
 
 # ─────────────────────────────────────────────

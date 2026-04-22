@@ -23,7 +23,7 @@ from backend.schemas.sop_actions import (
 )
 from database.models import AISuggestion, User
 
-from action.prompts import (
+from backend.action.prompts import (
     build_convert_prompt,
     build_convert_retry_prompt,
     build_gap_check_prompt,
@@ -31,8 +31,8 @@ from action.prompts import (
     build_justify_prompt,
     build_rewrite_prompt,
 )
-from action.runtime import ActionRuntime
-from action.utils import (
+from backend.action.runtime import ActionRuntime
+from backend.action.utils import (
     extract_source_titles,
     format_chunks,
     parse_with_retry,
