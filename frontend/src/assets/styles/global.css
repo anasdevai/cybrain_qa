@@ -544,6 +544,8 @@ select {
   gap: 16px;
   min-width: 0;
   overscroll-behavior: contain;
+  scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch;
 }
 
 .sidebar-card {
@@ -1204,5 +1206,385 @@ select {
 
   .tiptap.tiptap-sop {
     padding: 14px 10px 24px;
+  }
+}
+
+.figma-editor-page {
+  background: #f5f5f5;
+}
+
+.figma-shell {
+  display: grid;
+  grid-template-columns: 54px minmax(0, 1fr);
+  min-height: 100dvh;
+}
+
+.figma-left-rail {
+  border-right: 1px solid rgba(0, 0, 0, 0.1);
+  background: #ffffff;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 14px 12px;
+}
+
+.figma-rail-top,
+.figma-rail-bottom {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.figma-rail-dot {
+  width: 19px;
+  height: 19px;
+  border-radius: 999px;
+  background: #357856;
+  opacity: 0.85;
+}
+
+.figma-workspace {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.figma-header-strip {
+  height: 60px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 18px;
+}
+
+.figma-breadcrumb {
+  font-size: 24px;
+  color: #202020;
+}
+
+.figma-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.figma-sidebar-toggle {
+  height: 34px;
+  border-radius: 6px;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  background: #ffffff;
+  color: #24324a;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 10px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.figma-sidebar-toggle:hover {
+  background: #f7f8fa;
+}
+
+.figma-icon-chip {
+  width: 46px;
+  height: 46px;
+  border-radius: 23px;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  background: #f0f2f5;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #202020;
+}
+
+.figma-avatar-label {
+  font-size: 16px;
+  font-weight: 600;
+  color: #202020;
+}
+
+.figma-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 297px;
+  gap: 12px;
+  padding: 0 14px 12px 16px;
+  min-height: 0;
+  flex: 1;
+  transition: grid-template-columns 220ms ease, gap 220ms ease;
+}
+
+.figma-layout.sidebar-collapsed {
+  grid-template-columns: minmax(0, 1fr) 0;
+  gap: 0;
+}
+
+.figma-main-column {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.figma-card {
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  border-radius: 6px;
+  background: #ffffff;
+}
+
+.figma-actions-bar {
+  min-height: 64px;
+  padding: 8px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.figma-version-select {
+  position: relative;
+  width: 292px;
+  max-width: 100%;
+}
+
+.figma-version-select select,
+.figma-compare-select select {
+  width: 100%;
+  height: 36px;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  border-radius: 5px;
+  background: #ffffff;
+  padding: 0 32px 0 10px;
+  font-size: 16px;
+  color: #202020;
+  appearance: none;
+}
+
+.figma-version-select svg {
+  position: absolute;
+  right: 9px;
+  top: 10px;
+  pointer-events: none;
+  color: #6b7280;
+}
+
+.figma-btn {
+  height: 34px;
+  border-radius: 5px;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  padding: 0 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  background: #ffffff;
+  color: rgba(32, 32, 32, 0.8);
+  white-space: nowrap;
+  font-size: 13px;
+  line-height: 1;
+}
+
+.figma-btn-muted {
+  background: #f0f0f0;
+}
+
+.figma-btn-primary {
+  background: #357856;
+  color: #ffffff;
+}
+
+.figma-btn-small {
+  height: 34px;
+  font-size: 13px;
+}
+
+.figma-toolbar-card {
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.figma-toolbar-row {
+  display: flex;
+  align-items: center;
+  column-gap: 3px;
+  row-gap: 2px;
+  flex-wrap: wrap;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+}
+
+.figma-icon-btn {
+  width: 32px;
+  height: 32px;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  border-radius: 5px;
+  background: #ffffff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #202020;
+  padding: 0;
+  flex: 0 0 auto;
+}
+
+.figma-icon-btn.active,
+.figma-btn.active {
+  background: #edf3ef;
+}
+
+.figma-divider {
+  width: 1px;
+  height: 20px;
+  background: rgba(0, 0, 0, 0.1);
+  margin: 0 1px;
+}
+
+.figma-compare-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.figma-compare-select {
+  width: 124px;
+  flex: 0 0 auto;
+}
+
+.figma-compare-select select {
+  height: 34px;
+  font-size: 12px;
+}
+
+.figma-compare-group > span {
+  font-size: 12px;
+  color: #6b7280;
+  line-height: 1;
+}
+
+.figma-language-select {
+  position: relative;
+  width: 96px;
+  flex: 0 0 auto;
+}
+
+.figma-language-select select {
+  width: 100%;
+  height: 34px;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  border-radius: 5px;
+  background: #ffffff;
+  padding: 0 24px 0 8px;
+  font-size: 12px;
+  color: rgba(32, 32, 32, 0.9);
+  appearance: none;
+}
+
+.figma-language-select svg {
+  position: absolute;
+  right: 7px;
+  top: 10px;
+  pointer-events: none;
+  color: #6b7280;
+}
+
+.figma-editor-canvas {
+  flex: 1;
+  min-height: 0;
+}
+
+.figma-paper {
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  border-radius: 12px;
+  background: #ffffff;
+  min-height: 680px;
+  overflow: hidden;
+}
+
+.figma-sidebar {
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 12px 8px;
+  gap: 10px;
+  opacity: 1;
+  transform: translateX(0);
+  transform-origin: right center;
+  transition: opacity 180ms ease, transform 220ms ease, padding 180ms ease, border-color 180ms ease;
+  scrollbar-width: thin;
+  scrollbar-color: #000000 transparent;
+}
+
+.figma-sidebar::-webkit-scrollbar {
+  width: 8px;
+}
+
+.figma-sidebar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.figma-sidebar::-webkit-scrollbar-thumb {
+  background: #000000;
+  border-radius: 999px;
+}
+
+.figma-sidebar::-webkit-scrollbar-thumb:hover {
+  background: #000000;
+}
+
+.figma-sidebar.collapsed {
+  opacity: 0;
+  transform: translateX(8px);
+  pointer-events: none;
+  padding: 0;
+  border-color: transparent;
+  overflow: hidden;
+}
+
+.figma-sidebar .sidebar-card {
+  padding: 12px;
+  border-radius: 12px;
+  box-shadow: 0 4px 10px rgba(15, 23, 42, 0.04);
+}
+
+.figma-sidebar .sidebar-field-stack,
+.figma-sidebar .sidebar-list,
+.figma-sidebar .lifecycle-stack,
+.figma-sidebar .audit-stack {
+  gap: 8px;
+}
+
+.figma-sidebar .sidebar-title {
+  margin-bottom: 10px;
+}
+
+.figma-sidebar .sidebar-section-kicker {
+  margin-bottom: 6px;
+}
+
+/* Keep toolbars on a single line on wide screens */
+@media (min-width: 1440px) {
+  .figma-toolbar-row {
+    flex-wrap: nowrap;
+  }
+
+  .figma-toolbar-card {
+    overflow-x: auto;
+    scrollbar-width: thin;
+  }
+
+  .figma-toolbar-row > * {
+    align-self: center;
+  }
+
+  .figma-btn,
+  .figma-icon-btn,
+  .figma-language-select select,
+  .figma-compare-select select {
+    position: relative;
+    top: 0;
   }
 }

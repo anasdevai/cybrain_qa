@@ -12,23 +12,19 @@ import { TableCell } from '@tiptap/extension-table-cell'
 import { TableHeader } from '@tiptap/extension-table-header'
 import {
   Bold,
+  ChevronLeft,
+  ChevronRight,
   ChevronDown,
   Eye,
-  FileText,
   Import,
   Italic,
-  Link as LinkIcon,
   List,
   ListOrdered,
   Maximize2,
-  Plus,
-  Save,
   Table2,
   Underline as UnderlineIcon,
   Undo2,
-  Redo2,
-  Strikethrough,
-  X,
+  Redo2, Strikethrough,
 } from 'lucide-react'
 
 import RelatedContextSidebar from '../components/Editor/SOP/RelatedContextSidebar'
@@ -49,7 +45,7 @@ import {
   updateDocument,
   updateVersionStatus,
 } from '../api/editorApi'
-import { DEFAULT_SOP_VERSION_METADATA, SOP_LABELS, SOP_ORDER, SOP_STATES } from '../utils/sopConstants'
+import { DEFAULT_SOP_VERSION_METADATA, SOP_ORDER, SOP_STATES } from '../utils/sopConstants'
 import { formatOCRText } from '../utils/formatOCRText'
 import { mapOCRBlocksToHTML } from '../utils/mapOCRBlocksToHTML'
 import '../assets/styles/global.css'
@@ -138,6 +134,19 @@ const createAuditEntry = (action, fromStatus, toStatus, note, version) => ({
   createdAt: new Date().toISOString(),
 })
 
+const getLocalizedStatusLabel = (status, t) => {
+  const statusMap = {
+    draft: t.draft,
+    under_review: t.underReview,
+    changes_requested: t.changesRequested,
+    accepted: t.accepted,
+    rejected: t.rejected,
+    effective: t.effective,
+    obsolete: t.obsolete,
+  }
+  return statusMap[status] || status
+}
+
 const hasMeaningfulDraft = (docJson, sopMetadata = {}) => {
   const text = JSON.stringify(docJson || EMPTY_DOC)
   const hasDocContent = Boolean(text && text !== JSON.stringify(EMPTY_DOC))
@@ -181,6 +190,7 @@ const EditorPage = ({ isEmbedded = false, initialDocId = null }) => {
   const [isPreviewOpen, setIsPreviewOpen] = useState(false)
   const [isImporting, setIsImporting] = useState(false)
   const [isLoadingDocument, setIsLoadingDocument] = useState(false)
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false)
   const [compareBaseVersionId, setCompareBaseVersionId] = useState('')
   const [compareTargetVersionId, setCompareTargetVersionId] = useState('')
   const [diffVersions, setDiffVersions] = useState({ oldVersion: null, newVersion: null })
@@ -585,7 +595,7 @@ const EditorPage = ({ isEmbedded = false, initialDocId = null }) => {
   }
 
   const references = Array.isArray(metadata.references) ? metadata.references : []
-  const statusLabel = SOP_LABELS[sopStatus] || sopStatus
+  const statusLabel = getLocalizedStatusLabel(sopStatus, t)
   const versionSelectValue = currentVersionId || (versions[0]?.id ?? '')
   const compareBaseValue = compareBaseVersionId || currentVersionId || (versions[0]?.id ?? '')
   const compareTargetValue = compareTargetVersionId || currentVersionId || (versions[0]?.id ?? '')
@@ -605,254 +615,104 @@ const EditorPage = ({ isEmbedded = false, initialDocId = null }) => {
   })
 
   return (
-    <div className={`editor-page-container${isEmbedded ? ' editor-embedded' : ''}`}>
-      <div className="sop-workspace-shell">
-        <header className="sop-topbar">
-          <div className="sop-topbar-left">
-            <button type="button" className="topbar-crumb-btn">
-              <FileText size={16} />
-              <span>SOPs</span>
-            </button>
-            <div className="topbar-document-pill">
-              <FileText size={15} />
-              <span>{metadata.title || 'SOP-NEW'}</span>
-              <button type="button" className="pill-close-btn">
-                <X size={14} />
+    <div className={`editor-page-container figma-editor-page${isEmbedded ? ' editor-embedded' : ''}`}>
+      <div className="figma-shell">
+        <aside className="figma-left-rail" aria-hidden="true">
+          <div className="figma-rail-top"><div className="figma-rail-dot" /><div className="figma-rail-dot" /><div className="figma-rail-dot" /><div className="figma-rail-dot" /></div>
+          <div className="figma-rail-bottom"><div className="figma-rail-dot" /><div className="figma-rail-dot" /><div className="figma-rail-dot" /></div>
+        </aside>
+        <div className="figma-workspace">
+          <div className="figma-header-strip">
+            <div className="figma-breadcrumb"><span>{currentVersionLabel}</span></div>
+            <div className="figma-header-actions">
+              <button type="button" className="figma-sidebar-toggle" onClick={() => setIsSidebarOpen((prev) => !prev)} aria-expanded={isSidebarOpen} aria-controls="sop-metadata-sidebar" title={isSidebarOpen ? t.hideMetadataPanel : t.showMetadataPanel}>
+                {isSidebarOpen ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
+                <span>{isSidebarOpen ? t.hideMetadataPanel : t.showMetadataPanel}</span>
               </button>
+              <button type="button" className="figma-icon-chip"><Eye size={15} /></button>
+              <button type="button" className="figma-icon-chip"><Maximize2 size={15} /></button>
             </div>
           </div>
-
-          <div className="sop-topbar-right">
-            <button type="button" className="topbar-action-btn">
-              <Maximize2 size={15} />
-              <span>Focus</span>
-            </button>
-            <button type="button" className="topbar-action-btn" onClick={createNewVersionHandler}>
-              <Plus size={15} />
-              <span>New Version</span>
-            </button>
-            <button type="button" className="topbar-action-btn" onClick={() => setIsPreviewOpen(true)}>
-              <Eye size={15} />
-              <span>Preview</span>
-            </button>
-            <button type="button" className="topbar-action-btn" onClick={() => window.open(window.location.href, '_blank', 'noopener,noreferrer')}>
-              <LinkIcon size={15} />
-              <span>Open Tab</span>
-            </button>
-            <button
-              type="button"
-              className="topbar-save-btn"
-              onClick={persistDocument}
-              disabled={isHistoricalView}
-              title="Save (Ctrl/Cmd+S)"
-            >
-              <Save size={15} />
-              <span>{isHistoricalView ? 'Read Only' : isSaving ? 'Saving...' : 'Save'}</span>
-            </button>
-          </div>
-        </header>
-
-        <div className="sop-toolbar-row">
-          <div className="editor-toolbar-grid">
-            <div className="toolbar-lane toolbar-lane-primary">
-              <button
-                type="button"
-                className="toolbar-chip toolbar-chip-green"
-                onClick={persistDocument}
-                disabled={isHistoricalView}
-                title="Save (Ctrl/Cmd+S)"
-              >
-                Save
-              </button>
-              <button type="button" className="toolbar-chip toolbar-chip-green" onClick={createNewVersionHandler}>
-                New Version
-              </button>
-
-              <div className="toolbar-select-wrap toolbar-chip-select version-toolbar-select">
-                <select
-                  className="toolbar-select"
-                  value={versionSelectValue}
-                  onChange={(event) => loadVersionHandler(event.target.value)}
-                  disabled={versions.length === 0}
-                >
-                  {versions.length === 0 ? (
-                    <option value="">v1 (draft)</option>
-                  ) : null}
-                  {versions.map((item) => (
-                    <option key={item.id} value={item.id}>
-                      {buildVersionLabel(item)}
-                    </option>
-                  ))}
-                </select>
-                <ChevronDown size={16} />
-              </div>
-
-              <button type="button" className="toolbar-chip toolbar-chip-purple" onClick={() => setIsPreviewOpen(true)}>
-                {t.previewExport}
-              </button>
-
-              <button type="button" className={`toolbar-chip${editor.isActive('bold') ? ' active' : ''}`} onClick={() => editor.chain().focus().toggleBold().run()} disabled={isHistoricalView} title="Bold (Ctrl/Cmd+B)">
-                {t.bold}
-              </button>
-              <button type="button" className={`toolbar-chip${editor.isActive('italic') ? ' active' : ''}`} onClick={() => editor.chain().focus().toggleItalic().run()} disabled={isHistoricalView} title="Italic (Ctrl/Cmd+I)">
-                {t.italic}
-              </button>
-              <button type="button" className={`toolbar-chip${editor.isActive('underline') ? ' active' : ''}`} onClick={() => editor.chain().focus().toggleUnderline().run()} disabled={isHistoricalView} title="Underline (Ctrl/Cmd+U)">
-                {t.underline}
-              </button>
-              <button type="button" className={`toolbar-chip${editor.isActive('strike') ? ' active' : ''}`} onClick={() => editor.chain().focus().toggleStrike().run()} disabled={isHistoricalView}>
-                {t.strike}
-              </button>
-              <button type="button" className={`toolbar-chip${editor.isActive('heading', { level: 1 }) ? ' active' : ''}`} onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()} disabled={isHistoricalView} title="Heading 1 (Ctrl/Cmd+Shift+1)">
-                {t.heading1}
-              </button>
-              <button type="button" className={`toolbar-chip${editor.isActive('heading', { level: 2 }) ? ' active' : ''}`} onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()} disabled={isHistoricalView} title="Heading 2 (Ctrl/Cmd+Shift+2)">
-                {t.heading2}
-              </button>
-              <button type="button" className={`toolbar-chip${editor.isActive('heading', { level: 3 }) ? ' active' : ''}`} onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()} disabled={isHistoricalView} title="Heading 3 (Ctrl/Cmd+Shift+3)">
-                {t.heading3}
-              </button>
-              <div className="toolbar-select-wrap toolbar-chip-select language-toolbar-select">
-                <select
-                  className="toolbar-select"
-                  value={language}
-                  onChange={(event) => setLanguage(event.target.value)}
-                >
-                  <option value="en">{t.english}</option>
-                  <option value="de">{t.german}</option>
-                </select>
-                <ChevronDown size={16} />
-              </div>
-            </div>
-
-            <div className="toolbar-lane toolbar-lane-secondary">
-              <button type="button" className={`toolbar-chip${editor.isActive('bulletList') ? ' active' : ''}`} onClick={() => editor.chain().focus().toggleBulletList().run()} disabled={isHistoricalView}>
-                {t.bulletList}
-              </button>
-              <button type="button" className={`toolbar-chip${editor.isActive('orderedList') ? ' active' : ''}`} onClick={() => editor.chain().focus().toggleOrderedList().run()} disabled={isHistoricalView}>
-                {t.numberedList}
-              </button>
-              <button type="button" className="toolbar-chip" onClick={() => editor.chain().focus().undo().run()} disabled={isHistoricalView} title="Undo (Ctrl/Cmd+Z)">
-                {t.undo}
-              </button>
-              <button type="button" className="toolbar-chip" onClick={() => editor.chain().focus().redo().run()} disabled={isHistoricalView} title="Redo (Ctrl/Cmd+Shift+Z)">
-                {t.redo}
-              </button>
-              <button type="button" className={`toolbar-chip${editor.isActive('link') ? ' active' : ''}`} onClick={openLinkModal} disabled={isHistoricalView}>
-                {t.insertUrl}
-              </button>
-              <button type="button" className="toolbar-chip" onClick={insertPlaceholder} disabled={isHistoricalView}>
-                {t.insertPlaceholder}
-              </button>
-
-              <div className="compare-toolbar-group">
-                <div className="toolbar-select-wrap toolbar-chip-select compare-select">
-                  <select
-                    className="toolbar-select"
-                    value={compareBaseValue}
-                    onChange={(event) => setCompareBaseVersionId(event.target.value)}
-                    disabled={versions.length === 0}
-                  >
-                    {versions.length === 0 ? (
-                      <option value="">Base: v1</option>
-                    ) : null}
-                    {versions.map((item) => (
-                      <option key={`base-${item.id}`} value={item.id}>
-                        Base: v{item.versionNumber || 1}
-                      </option>
-                    ))}
+          <div className={`figma-layout${isSidebarOpen ? '' : ' sidebar-collapsed'}`}>
+            <main className="figma-main-column">
+              <section className="figma-card figma-actions-bar">
+                <div className="figma-version-select">
+                  <select value={versionSelectValue} onChange={(event) => loadVersionHandler(event.target.value)} disabled={versions.length === 0}>
+                    {versions.length === 0 ? <option value="">v1 (draft)</option> : null}
+                    {versions.map((item) => (<option key={item.id} value={item.id}>{buildVersionLabel(item)}</option>))}
                   </select>
                   <ChevronDown size={16} />
                 </div>
-                <span className="compare-separator">vs</span>
-                <div className="toolbar-select-wrap toolbar-chip-select compare-select">
-                  <select
-                    className="toolbar-select"
-                    value={compareTargetValue}
-                    onChange={(event) => setCompareTargetVersionId(event.target.value)}
-                    disabled={versions.length === 0}
-                  >
-                    {versions.length === 0 ? (
-                      <option value="">Target: v1</option>
-                    ) : null}
-                    {versions.map((item) => (
-                      <option key={`target-${item.id}`} value={item.id}>
-                        Target: v{item.versionNumber || 1}
-                      </option>
-                    ))}
-                  </select>
-                  <ChevronDown size={16} />
+                <button type="button" className="figma-btn figma-btn-muted" onClick={() => setIsPreviewOpen(true)}>{t.previewExport}</button>
+                <button type="button" className="figma-btn figma-btn-muted" onClick={createNewVersionHandler}>{t.newVersion}</button>
+                <button type="button" className="figma-btn figma-btn-primary" onClick={persistDocument} disabled={isHistoricalView}>{isHistoricalView ? t.readOnly : isSaving ? t.saving : t.save}</button>
+              </section>
+              <section className="figma-card figma-toolbar-card">
+                <div className="figma-toolbar-row">
+                  <button type="button" className="figma-icon-btn" onClick={() => editor.chain().focus().undo().run()} disabled={isHistoricalView}><Undo2 size={16} /></button>
+                  <button type="button" className="figma-icon-btn" onClick={() => editor.chain().focus().redo().run()} disabled={isHistoricalView}><Redo2 size={16} /></button>
+                  <div className="figma-divider" />
+                  <button type="button" className={`figma-icon-btn${editor.isActive('bold') ? ' active' : ''}`} onClick={() => editor.chain().focus().toggleBold().run()} disabled={isHistoricalView}><Bold size={16} /></button>
+                  <button type="button" className={`figma-icon-btn${editor.isActive('italic') ? ' active' : ''}`} onClick={() => editor.chain().focus().toggleItalic().run()} disabled={isHistoricalView}><Italic size={16} /></button>
+                  <button type="button" className={`figma-icon-btn${editor.isActive('underline') ? ' active' : ''}`} onClick={() => editor.chain().focus().toggleUnderline().run()} disabled={isHistoricalView}><UnderlineIcon size={16} /></button>
+                  <button type="button" className={`figma-icon-btn${editor.isActive('strike') ? ' active' : ''}`} onClick={() => editor.chain().focus().toggleStrike().run()} disabled={isHistoricalView}><Strikethrough size={16} /></button>
+                  <button type="button" className={`figma-icon-btn${editor.isActive('bulletList') ? ' active' : ''}`} onClick={() => editor.chain().focus().toggleBulletList().run()} disabled={isHistoricalView}><List size={16} /></button>
+                  <button type="button" className={`figma-icon-btn${editor.isActive('orderedList') ? ' active' : ''}`} onClick={() => editor.chain().focus().toggleOrderedList().run()} disabled={isHistoricalView}><ListOrdered size={16} /></button>
+                  <button type="button" className={`figma-btn figma-btn-small${editor.isActive('link') ? ' active' : ''}`} onClick={openLinkModal} disabled={isHistoricalView}>{t.insertUrl}</button>
                 </div>
-                <button type="button" className="toolbar-chip" onClick={openCompareViewer} disabled={!documentId || !compareBaseVersionId || !compareTargetVersionId}>
-                  {t.compare}
-                </button>
-              </div>
-
-              <button type="button" className="toolbar-chip" onClick={() => editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()} disabled={isHistoricalView} title="Insert table (Ctrl/Cmd+Alt+T)">
-                {t.insertTable}
-              </button>
-
-              <label className={`toolbar-chip toolbar-chip-file${isHistoricalView ? ' disabled' : ''}`}>
-                {t.importPdfDocx}
-                <input type="file" accept=".pdf,.txt,.md,.doc,.docx" hidden onChange={triggerImport} disabled={isHistoricalView} />
-              </label>
-            </div>
-          </div>
-        </div>
-
-        <div className="sop-body-layout">
-          <main className="sop-editor-stage">
-            <div className="editor-stage-header">
-              <div className="editor-stage-statuses">
-                {isHistoricalView ? (
-                  <span className="editor-stage-hint">Historical version loaded. Switch back to latest version to edit.</span>
-                ) : null}
-                {isLoadingDocument ? (
-                  <span className="editor-stage-hint">Loading...</span>
-                ) : null}
-              </div>
-            </div>
-
-            <div className="sop-editor-paper">
-              <EditorContent editor={editor} />
-              <AIAssistantBubbleMenu
-                editor={editor}
-                sopMetadata={aiSopContext}
-                isEditable={!isHistoricalView}
-              />
-            </div>
-          </main>
-
-          <aside className="sop-sidebar">
+                <div className="figma-toolbar-row">
+                  <button type="button" className="figma-btn figma-btn-small" onClick={() => editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()} disabled={isHistoricalView}><Table2 size={16} />{t.insertTable}</button>
+                  <button type="button" className="figma-btn figma-btn-small" onClick={() => editor.chain().focus().deleteTable().run()} disabled={isHistoricalView || !editor.can().chain().focus().deleteTable().run()}>{t.deleteTable}</button>
+                  <div className="figma-compare-group">
+                    <div className="figma-compare-select"><select value={compareBaseValue} onChange={(event) => setCompareBaseVersionId(event.target.value)} disabled={versions.length === 0}>{versions.length === 0 ? <option value="">{t.base}: v1</option> : null}{versions.map((item) => <option key={`base-${item.id}`} value={item.id}>{t.base}: v{item.versionNumber || 1}</option>)}</select></div>
+                    <span>{t.vs}</span>
+                    <div className="figma-compare-select"><select value={compareTargetValue} onChange={(event) => setCompareTargetVersionId(event.target.value)} disabled={versions.length === 0}>{versions.length === 0 ? <option value="">{t.target}: v1</option> : null}{versions.map((item) => <option key={`target-${item.id}`} value={item.id}>{t.target}: v{item.versionNumber || 1}</option>)}</select></div>
+                  </div>
+                  <button type="button" className="figma-btn figma-btn-primary" onClick={openCompareViewer} disabled={!documentId || !compareBaseVersionId || !compareTargetVersionId}>{t.compare}</button>
+                  <label className={`figma-btn figma-btn-small${isHistoricalView ? ' disabled' : ''}`}><Import size={15} />{t.importPdfDocx}<input type="file" accept=".pdf,.txt,.md,.doc,.docx" hidden onChange={triggerImport} disabled={isHistoricalView} /></label>
+                  <button type="button" className="figma-btn figma-btn-small" onClick={insertPlaceholder} disabled={isHistoricalView}>{t.insertPlaceholder}</button>
+                  <div className="figma-language-select"><select value={language} onChange={(event) => setLanguage(event.target.value)}><option value="de">{t.german}</option><option value="en">{t.english}</option></select><ChevronDown size={14} /></div>
+                </div>
+              </section>
+              <section className="figma-editor-canvas">
+                {isHistoricalView ? <span className="editor-stage-hint">{t.historicalVersionLoaded}</span> : null}
+                {isLoadingDocument ? <span className="editor-stage-hint">{t.loading}</span> : null}
+                <div className="figma-paper">
+                  <EditorContent editor={editor} />
+                  <AIAssistantBubbleMenu editor={editor} sopMetadata={aiSopContext} isEditable={!isHistoricalView} />
+                </div>
+              </section>
+            </main>
+            <aside id="sop-metadata-sidebar" className={`sop-sidebar figma-sidebar${isSidebarOpen ? '' : ' collapsed'}`} aria-hidden={!isSidebarOpen}>
             <div className="sidebar-card sidebar-card-emphasis">
-              <div className="sidebar-section-kicker">Document details</div>
-              <h3 className="sidebar-title">SOP-Metadata</h3>
+              <div className="sidebar-section-kicker">{t.documentDetails}</div>
+              <h3 className="sidebar-title">{t.sopMetadata}</h3>
               <div className="sidebar-field-stack">
                 <input className="sidebar-input" value={metadata.documentId || ''} onChange={(event) => handleMetadataChange('documentId', event.target.value)} placeholder="SOP-001" disabled={isHistoricalView} />
-                <input className="sidebar-input" value={metadata.title || ''} onChange={(event) => handleMetadataChange('title', event.target.value)} placeholder="Document title" disabled={isHistoricalView} />
-                <input className="sidebar-input" value={metadata.department || ''} onChange={(event) => handleMetadataChange('department', event.target.value)} placeholder="Department" disabled={isHistoricalView} />
-                <input className="sidebar-input" value={metadata.author || ''} onChange={(event) => handleMetadataChange('author', event.target.value)} placeholder="Author" disabled={isHistoricalView} />
-                <input className="sidebar-input" value={metadata.reviewer || ''} onChange={(event) => handleMetadataChange('reviewer', event.target.value)} placeholder="Reviewer" disabled={isHistoricalView} />
+                <input className="sidebar-input" value={metadata.title || ''} onChange={(event) => handleMetadataChange('title', event.target.value)} placeholder={t.title} disabled={isHistoricalView} />
+                <input className="sidebar-input" value={metadata.department || ''} onChange={(event) => handleMetadataChange('department', event.target.value)} placeholder={t.department} disabled={isHistoricalView} />
+                <input className="sidebar-input" value={metadata.author || ''} onChange={(event) => handleMetadataChange('author', event.target.value)} placeholder={t.author} disabled={isHistoricalView} />
+                <input className="sidebar-input" value={metadata.reviewer || ''} onChange={(event) => handleMetadataChange('reviewer', event.target.value)} placeholder={t.reviewer} disabled={isHistoricalView} />
                 <input className="sidebar-input" type="date" value={metadata.effectiveDate || ''} onChange={(event) => handleMetadataChange('effectiveDate', event.target.value)} disabled={isHistoricalView} />
                 <input className="sidebar-input" type="date" value={metadata.reviewDate || ''} onChange={(event) => handleMetadataChange('reviewDate', event.target.value)} disabled={isHistoricalView} />
-                <input className="sidebar-input" value={metadata.riskLevel || ''} onChange={(event) => handleMetadataChange('riskLevel', event.target.value)} placeholder="Risk level" disabled={isHistoricalView} />
+                <input className="sidebar-input" value={metadata.riskLevel || ''} onChange={(event) => handleMetadataChange('riskLevel', event.target.value)} placeholder={t.riskLevel} disabled={isHistoricalView} />
               </div>
             </div>
 
             <div className="sidebar-card">
-              <div className="sidebar-section-kicker">Reference management</div>
-              <h3 className="sidebar-title">SOP-Referenzen</h3>
+              <div className="sidebar-section-kicker">{t.referenceManagement}</div>
+              <h3 className="sidebar-title">{t.sopReferences}</h3>
               <div className="reference-entry-row">
-                <button type="button" className="sidebar-mini-btn success" onClick={addReference} disabled={isHistoricalView}>Hinzufugen</button>
+                <button type="button" className="sidebar-mini-btn success" onClick={addReference} disabled={isHistoricalView}>{t.add}</button>
               </div>
               <div className="sidebar-list">
                 {references.length === 0 ? (
-                  <p className="sidebar-empty-text">No references added.</p>
+                  <p className="sidebar-empty-text">{t.noReferencesAdded}</p>
                 ) : (
                   references.map((item, index) => (
                     <div key={`${item}-${index}`} className="reference-row">
                       <span>{item}</span>
-                      <button type="button" className="sidebar-mini-btn danger" onClick={() => removeReference(index)} disabled={isHistoricalView}>Entfernen</button>
+                      <button type="button" className="sidebar-mini-btn danger" onClick={() => removeReference(index)} disabled={isHistoricalView}>{t.remove}</button>
                     </div>
                   ))
                 )}
@@ -860,46 +720,44 @@ const EditorPage = ({ isEmbedded = false, initialDocId = null }) => {
             </div>
 
             <div className="sidebar-card">
-              <div className="sidebar-section-kicker">Workflow action</div>
-              <h3 className="sidebar-title">SOP-Aktionen</h3>
-              <div className="status-note">Aktueller Status: {statusLabel}</div>
+              <div className="sidebar-section-kicker">{t.workflowAction}</div>
+              <h3 className="sidebar-title">{t.sopActions}</h3>
+              <div className="status-note">{t.currentStatus}: {statusLabel}</div>
               <textarea
                 className="sidebar-textarea"
                 value={versionNote}
                 onChange={(event) => setVersionNote(event.target.value)}
-                placeholder="Anderungszusammenfassung hinzufugen/Genehmigungsvermerk/Grund fur Verwaltung..."
+                placeholder={t.sopNotePlaceholder}
                 disabled={isHistoricalView}
               />
-              <button type="button" className="sidebar-primary-btn" onClick={submitForReview} disabled={isHistoricalView}>
-                Zur Uberprufung einreichen
-              </button>
+              <button type="button" className="sidebar-primary-btn" onClick={submitForReview} disabled={isHistoricalView}>{t.submitForReview}</button>
             </div>
 
             <div className="sidebar-card">
-              <div className="sidebar-section-kicker">Lifecycle</div>
-              <h3 className="sidebar-title">SOP-Lebenszyklus</h3>
+              <div className="sidebar-section-kicker">{t.lifecycle}</div>
+              <h3 className="sidebar-title">{t.sopLifecycle}</h3>
               <div className="lifecycle-stack">
                 {SOP_ORDER.map((stateId) => (
                   <div key={stateId} className={`lifecycle-pill${sopStatus === stateId ? ' active' : ''}`}>
-                    <span>{SOP_LABELS[stateId] || stateId}</span>
-                    {sopStatus === stateId ? <span>(Aktuell)</span> : null}
+                    <span>{getLocalizedStatusLabel(stateId, t)}</span>
+                    {sopStatus === stateId ? <span>({t.current})</span> : null}
                   </div>
                 ))}
               </div>
             </div>
 
             <div className="sidebar-card">
-              <div className="sidebar-section-kicker">Change log</div>
-              <h3 className="sidebar-title">SOP-Audit-Trail</h3>
+              <div className="sidebar-section-kicker">{t.changeLog}</div>
+              <h3 className="sidebar-title">{t.sopAuditTrail}</h3>
               {auditTrail.length === 0 ? (
-                <p className="sidebar-empty-text">Bisher keine Prufeintrage.</p>
+                <p className="sidebar-empty-text">{t.noAuditEntries}</p>
               ) : (
                 <div className="audit-stack">
                   {auditTrail.slice().reverse().map((entry) => (
                     <div key={entry.id} className="audit-item">
                       <div className="audit-item-top">
                         <strong>v{entry.version || currentVersion?.versionNumber || 1}</strong>
-                        <span>{SOP_LABELS[entry.toStatus] || entry.toStatus}</span>
+                        <span>{getLocalizedStatusLabel(entry.toStatus, t)}</span>
                       </div>
                       <p>{entry.note || 'Workflow update'}</p>
                     </div>
@@ -914,8 +772,9 @@ const EditorPage = ({ isEmbedded = false, initialDocId = null }) => {
               refreshToken={relatedContextRefreshToken}
             />
           </aside>
+          </div>
         </div>
-
+      </div>
         <StatusBar
           wordCount={wordCount}
           charCount={charCount}
@@ -926,7 +785,6 @@ const EditorPage = ({ isEmbedded = false, initialDocId = null }) => {
           onProfileChange={() => {}}
           workflowStatus={sopStatus}
         />
-      </div>
 
       <LinkModal
         isOpen={isLinkModalOpen}

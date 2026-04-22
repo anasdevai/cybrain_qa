@@ -2,6 +2,7 @@ import os
 import uuid
 from collections import defaultdict
 from datetime import datetime
+from pathlib import Path
 from typing import Any
 
 from qdrant_client import QdrantClient
@@ -43,10 +44,39 @@ _embedder: SentenceTransformer | None = None
 _qdrant: QdrantClient | None = None
 
 
+def _resolve_hf_cache_dir() -> str:
+    configured = os.getenv("HF_HOME") or os.getenv("HUGGINGFACE_HUB_CACHE") or os.getenv("EMBEDDING_HF_CACHE_DIR")
+    if configured:
+        cache_dir = Path(configured).expanduser().resolve()
+    else:
+        cache_dir = (Path(__file__).resolve().parents[3] / ".hf-cache").resolve()
+
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    os.environ["HF_HOME"] = str(cache_dir)
+    os.environ["HUGGINGFACE_HUB_CACHE"] = str(cache_dir / "hub")
+    return str(cache_dir)
+
+
+def _is_model_cached(cache_dir: str, model_name: str) -> bool:
+    model_key = model_name.replace("/", "--")
+    snapshots_dir = Path(cache_dir) / "hub" / f"models--{model_key}" / "snapshots"
+    if not snapshots_dir.exists():
+        return False
+    return any(p.is_dir() for p in snapshots_dir.iterdir())
+
+
 def _get_embedder() -> SentenceTransformer:
     global _embedder
     if _embedder is None:
-        _embedder = SentenceTransformer(BGE_M3_MODEL, device=os.getenv("EMBEDDING_DEVICE", "cpu"))
+        cache_dir = _resolve_hf_cache_dir()
+        local_only = _is_model_cached(cache_dir, BGE_M3_MODEL)
+        _embedder = SentenceTransformer(
+            BGE_M3_MODEL,
+            device=os.getenv("EMBEDDING_DEVICE", "cpu"),
+            cache_folder=cache_dir,
+            local_files_only=local_only,
+        )
+        print(f"[semantic-pipeline] BGE-M3 initialized once (cache={cache_dir}, local_only={local_only})")
     return _embedder
 
 
@@ -58,6 +88,16 @@ def _get_qdrant() -> QdrantClient:
             raise RuntimeError("QDRANT_URL is not configured.")
         _qdrant = QdrantClient(url=qdrant_url, api_key=os.getenv("QDRANT_API_KEY"))
     return _qdrant
+
+
+def prewarm_runtime() -> None:
+    """
+    Worker startup hook: load heavy runtime once and probe embedding dimension.
+    """
+    embedder = _get_embedder()
+    probe = embedder.encode(["warmup_probe"], normalize_embeddings=True)
+    SemanticPipelineService._ensure_collection(len(probe[0]))
+    _get_qdrant()
 
 
 def _split_long_text(text: str, size: int = 1200, overlap: int = 200) -> list[str]:

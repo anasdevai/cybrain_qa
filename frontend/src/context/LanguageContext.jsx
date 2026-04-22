@@ -18,7 +18,7 @@ const LanguageContext = createContext(null)
  */
 export function LanguageProvider({ children }) {
     const [language, setLanguage] = useState(() => {
-        return localStorage.getItem('app_language') || 'en'
+        return localStorage.getItem('app_language') || 'de'
     })
 
     useEffect(() => {
@@ -29,7 +29,7 @@ export function LanguageProvider({ children }) {
         return {
             language,
             setLanguage,
-            t: translations[language] || translations.en,
+            t: translations[language] || translations.de,
         }
     }, [language])
 

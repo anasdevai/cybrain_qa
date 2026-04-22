@@ -5,7 +5,7 @@ import {
   AlertCircle, FileText, X, FileEdit, List, Loader
 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
-import { getSOPs } from '../api/editorApi'
+import { getSOPs, queryAI } from '../api/editorApi'
 import SOPTable from '../components/SOPs/SOPTable'
 import StatusBadge from '../components/Common/StatusBadge'
 import EditorPage from './EditorPage'
@@ -65,14 +65,14 @@ function SOPCard({ sop, onOpen, onOpenNewTab, onEdit }) {
   )
 }
 
-function KISummary({ open, onToggle }) {
+function KISummary({ open, onToggle, query, summaryText, sources, loading, error }) {
   return (
     <div className={`sops-ki-summary ${open ? 'sops-ki-open' : ''}`}>
       <button className="ki-summary-header" onClick={onToggle}>
         <div className="ki-header-left">
           <Sparkles size={14} className="ki-sparkle" />
           <span className="ki-title">KI-Zusammenfassung</span>
-          <span className="ki-subtitle">„Welche SOPs haben die meisten Abweichungen?"</span>
+          <span className="ki-subtitle">„{query || 'Welche SOPs haben die meisten Abweichungen?'}"</span>
         </div>
         <div className="ki-header-right">
           {open ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
@@ -81,9 +81,22 @@ function KISummary({ open, onToggle }) {
 
       {open && (
         <div className="ki-summary-body">
-          <p className="ki-summary-text" style={{ color: 'var(--text-muted)', fontStyle: 'italic', fontSize: 13 }}>
-            KI-Analyse nicht verfügbar — bitte Backend-Endpunkt verbinden.
-          </p>
+          {loading ? <p className="ki-summary-text">KI analysiert Kontext...</p> : null}
+          {error ? <p className="ki-summary-text" style={{ color: 'var(--error)' }}>{error}</p> : null}
+          {!loading && !error ? (
+            <p className="ki-summary-text" style={{ color: 'var(--text-muted)', fontSize: 13 }}>
+              {summaryText || 'Frage stellen, um eine KI-Zusammenfassung aus dem Backend zu laden.'}
+            </p>
+          ) : null}
+          {!loading && sources?.length > 0 ? (
+            <div className="ki-summary-source-list">
+              {sources.slice(0, 5).map((src, idx) => (
+                <span key={`${src?.id || src?.label || 'src'}-${idx}`} className="ki-summary-source-chip">
+                  {src?.label || src?.id || `Quelle ${idx + 1}`}
+                </span>
+              ))}
+            </div>
+          ) : null}
           <div className="ki-summary-actions">
             <button className="ki-action-btn">
               <Download size={13} /> Exportieren
@@ -158,6 +171,10 @@ export default function SOPsPage() {
   const [searchTerm, setSearchTerm] = useState('')
   const [activeFilterTab, setActiveFilterTab] = useState('Alle')
   const [sortOrder, setSortOrder] = useState('asc') // 'asc' | 'recent' | 'oldest'
+  const [isKIAnalyzing, setIsKIAnalyzing] = useState(false)
+  const [kiError, setKIError] = useState('')
+  const [kiSummaryText, setKISummaryText] = useState('')
+  const [kiSources, setKISources] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [sops, setSops] = useState([])
@@ -230,9 +247,21 @@ export default function SOPsPage() {
   }, [openNewSOPTab])
 
   const handleAnalyze = () => {
-    if (!searchQuery.trim()) return
-    // TODO: connect to /api/ai/query when backend endpoint available
-    console.log('[TODO] Send query to AI backend:', searchQuery)
+    const text = searchQuery.trim()
+    if (!text) return
+    setIsKIAnalyzing(true)
+    setKIError('')
+    queryAI(text, { category: 'sop' })
+      .then((res) => {
+        setKISummaryText(res?.answer || 'Keine Antwort vom Backend erhalten.')
+        setKISources(Array.isArray(res?.sources) ? res.sources : [])
+      })
+      .catch((err) => {
+        setKIError(err?.message || 'KI-Analyse fehlgeschlagen.')
+        setKISummaryText('')
+        setKISources([])
+      })
+      .finally(() => setIsKIAnalyzing(false))
   }
 
   const handleQuickFilter = (query) => setSearchQuery(query)
@@ -336,7 +365,6 @@ export default function SOPsPage() {
                 </select>
               </div>
             </section>
-
             <div className="table-container-card">
               {loading ? (
                 <div className="table-loading">
@@ -432,8 +460,15 @@ export default function SOPsPage() {
             </div>
 
             {/* KI Summary */}
-            <KISummary open={kiSummaryOpen} onToggle={() => setKiSummaryOpen(v => !v)} />
-
+            <KISummary
+              open={kiSummaryOpen}
+              onToggle={() => setKiSummaryOpen(v => !v)}
+              query={searchQuery}
+              summaryText={kiSummaryText}
+              sources={kiSources}
+              loading={isKIAnalyzing}
+              error={kiError}
+            />
             {/* Relevant SOPs from backend */}
             <div className="sops-section-title-row">
               <h2 className="sops-section-title">Relevante SOPs im aktuellen Kontext</h2>

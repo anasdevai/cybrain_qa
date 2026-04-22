@@ -87,10 +87,14 @@ JWT_REFRESH_SECRET_KEY=your_secure_refresh_hash
    ```bash
    uv run alembic upgrade head
    ```
-3. Start the FastAPI server:
+3. Start the FastAPI server (without reload for heavy embedding models):
    ```bash
-   uv run uvicorn main:app --reload
-   # Server runs on http://127.0.0.1:8000
+   uv run uvicorn app.main:app --host 127.0.0.1 --port 8000
+   # Server runs on http://127.0.0.1:8000 and only one process loads runtime state
+   ```
+4. Start the dedicated embedding worker (loads BGE-M3 once and reuses it for all jobs):
+   ```bash
+   uv run python backend/run_embedding_worker.py
    ```
 
 ### 4. Frontend Setup

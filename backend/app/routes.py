@@ -180,8 +180,12 @@ def _resolve_current_version(db: Session, sop: SOP) -> SOPVersion | None:
 def _schedule_semantic_job(background_tasks: BackgroundTasks, entity_type: str, entity_id: uuid.UUID, version_id: uuid.UUID | None = None, job_type: str = "entity_reindex"):
     if entity_type not in ENTITY_TYPES:
         return
-    job_id = SemanticPipelineService.enqueue_reindex(entity_type=entity_type, entity_id=entity_id, version_id=version_id, job_type=job_type)
-    background_tasks.add_task(SemanticPipelineService.process_job, job_id)
+    SemanticPipelineService.enqueue_reindex(
+        entity_type=entity_type,
+        entity_id=entity_id,
+        version_id=version_id,
+        job_type=job_type,
+    )
 
 
 def _normalize_sop_metadata(sop_number: str, title: str, department: str = None, raw_meta: dict = None) -> dict:

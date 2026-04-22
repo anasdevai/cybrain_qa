@@ -663,6 +663,23 @@
   padding-top: 10px;
 }
 
+.ki-summary-source-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.ki-summary-source-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 8px;
+  border-radius: var(--radius-full);
+  border: 1px solid var(--border-light);
+  background: #f7faf8;
+  color: #2f6f52;
+  font-size: 11px;
+}
+
 .ki-tags {
   display: flex;
   flex-wrap: wrap;
