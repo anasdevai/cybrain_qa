@@ -11,6 +11,7 @@ const AIAssistantBubbleMenu = ({ editor, sopMetadata, isEditable = true }) => {
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [menuPosition, setMenuPosition] = useState(null)
   const selectionRef = useRef(null)
+  const menuRef = useRef(null)
 
   useEffect(() => {
     if (!editor || !isEditable) return undefined
@@ -19,8 +20,11 @@ const AIAssistantBubbleMenu = ({ editor, sopMetadata, isEditable = true }) => {
       const { selection } = editor.state
 
       if (selection.empty) {
-        selectionRef.current = null
-        setMenuPosition(null)
+        const activeElement = document.activeElement
+        if (!menuRef.current?.contains(activeElement)) {
+          selectionRef.current = null
+          setMenuPosition(null)
+        }
         return
       }
 
@@ -64,16 +68,23 @@ const AIAssistantBubbleMenu = ({ editor, sopMetadata, isEditable = true }) => {
     if (!selectedText) return
 
     let sectionName = 'Selected text'
-    let sectionType = 'text'
+    let sectionType = 'Paragraph'
 
     try {
       const resolvedPos = editor.state.doc.resolve(savedSelection.from)
-      for (let depth = resolvedPos.depth; depth > 0; depth -= 1) {
+      for (let depth = resolvedPos.depth; depth >= 0; depth -= 1) {
         const node = resolvedPos.node(depth)
         if (node.type.name === 'heading') {
           sectionName = node.textContent
-          sectionType = `heading level ${node.attrs.level}`
+          sectionType = 'Heading'
           break
+        }
+        if (node.type.name === 'table') {
+          sectionType = 'Table'
+        } else if (node.type.name === 'bulletList' || node.type.name === 'orderedList' || node.type.name === 'listItem') {
+          sectionType = 'List'
+        } else if (node.type.name === 'paragraph') {
+          sectionType = 'Paragraph'
         }
       }
     } catch {
@@ -85,6 +96,8 @@ const AIAssistantBubbleMenu = ({ editor, sopMetadata, isEditable = true }) => {
       const result = await performAIAction({
         action,
         text: selectedText,
+        document_id: sopMetadata?.documentId || null,
+        section_id: `${savedSelection.from}-${savedSelection.to}`,
         sop_title: sopMetadata?.title || 'Untitled SOP',
         section_name: sectionName,
         section_type: sectionType,
@@ -124,11 +137,13 @@ const AIAssistantBubbleMenu = ({ editor, sopMetadata, isEditable = true }) => {
     <>
       {menuPosition ? (
         <div
+          ref={menuRef}
           className="ai-action-menu"
           style={{
             top: menuPosition.top,
             left: menuPosition.left,
           }}
+          onMouseDown={(event) => event.preventDefault()}
         >
           <div className="ai-action-menu__header">AI actions</div>
           <div className="ai-action-menu__actions">

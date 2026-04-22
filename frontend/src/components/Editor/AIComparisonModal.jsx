@@ -12,6 +12,15 @@ const StructuredDetails = ({ action, structuredData }) => {
   if (!structuredData) return null
 
   if (action === 'gap_check') {
+    const gaps = Array.isArray(structuredData.gaps) ? structuredData.gaps : []
+    const items = gaps.length > 0
+      ? gaps
+      : [{
+        issue: structuredData.issue,
+        explanation: structuredData.explanation,
+        recommendation: structuredData.recommendation,
+      }]
+
     return (
       <div className="ai-details ai-details--amber">
         <div className="ai-details__title">
@@ -19,51 +28,44 @@ const StructuredDetails = ({ action, structuredData }) => {
           <span>Structured QA Findings</span>
         </div>
         <div className="ai-details__stack">
-          <div className="ai-details__item">
-            <p className="ai-details__label">Issue</p>
-            <p className="ai-details__value">{structuredData.issue}</p>
-          </div>
-          <div className="ai-details__item">
-            <p className="ai-details__label">Explanation</p>
-            <p className="ai-details__value">{structuredData.explanation}</p>
-          </div>
-          <div className="ai-details__item">
-            <p className="ai-details__label">Recommendation</p>
-            <p className="ai-details__value">{structuredData.recommendation}</p>
-          </div>
+          {items.map((gap, index) => (
+            <div key={`gap-${index}`} className="ai-details__item">
+              <p className="ai-details__label">Issue</p>
+              <p className="ai-details__value">{gap.issue}</p>
+              <p className="ai-details__label">Explanation</p>
+              <p className="ai-details__value">{gap.explanation}</p>
+              <p className="ai-details__label">Recommendation</p>
+              <p className="ai-details__value">{gap.recommendation}</p>
+            </div>
+          ))}
         </div>
       </div>
     )
   }
 
   if (action === 'rewrite') {
-    const sections = [
-      ['Purpose', structuredData.purpose],
-      ['Scope', structuredData.scope],
-      ['Responsibilities', structuredData.responsibilities],
-      ['Documentation', structuredData.documentation],
-    ]
-
     return (
       <div className="ai-details ai-details--green">
         <div className="ai-details__title">
           <Wand2 size={18} />
-          <span>Required SOP Structure Applied</span>
+          <span>Rewrite Summary</span>
         </div>
-        {sections.map(([label, value]) => (
-          <div key={label} className="ai-details__item">
-            <p className="ai-details__label">{label}</p>
-            <p className="ai-details__value">{value}</p>
-          </div>
-        ))}
         <div className="ai-details__item">
-          <p className="ai-details__label">Procedure</p>
-          <ol className="ai-details__list">
-            {(structuredData.procedure || []).map((step, index) => (
-              <li key={`procedure-${index}`}>{step}</li>
-            ))}
-          </ol>
+          <p className="ai-details__label">Rewritten Text</p>
+          <p className="ai-details__value">{structuredData.rewritten_text || suggestedText}</p>
         </div>
+        {structuredData.structural_changes ? (
+          <div className="ai-details__item">
+            <p className="ai-details__label">Changes Made</p>
+            <p className="ai-details__value">{structuredData.structural_changes}</p>
+          </div>
+        ) : null}
+        {structuredData.rationale ? (
+          <div className="ai-details__item">
+            <p className="ai-details__label">Rationale</p>
+            <p className="ai-details__value">{structuredData.rationale}</p>
+          </div>
+        ) : null}
       </div>
     )
   }
@@ -77,11 +79,21 @@ const StructuredDetails = ({ action, structuredData }) => {
         </div>
         <div className="ai-details__item">
           <p className="ai-details__label">Improved Version</p>
-          <p className="ai-details__value">{structuredData.improved_version}</p>
+          <p className="ai-details__value">{structuredData.improved_text || structuredData.improved_version || suggestedText}</p>
         </div>
+        {Array.isArray(structuredData.changes_made) && structuredData.changes_made.length > 0 ? (
+          <div className="ai-details__item">
+            <p className="ai-details__label">Changes Made</p>
+            <ol className="ai-details__list">
+              {structuredData.changes_made.map((item, index) => (
+                <li key={`change-${index}`}>{item}</li>
+              ))}
+            </ol>
+          </div>
+        ) : null}
         <div className="ai-details__item">
-          <p className="ai-details__label">Reason for Improvement</p>
-          <p className="ai-details__value">{structuredData.reason_for_improvement}</p>
+          <p className="ai-details__label">Compliance Note</p>
+          <p className="ai-details__value">{structuredData.compliance_note || structuredData.reason_for_improvement}</p>
         </div>
       </div>
     )
