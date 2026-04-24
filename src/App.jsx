@@ -1108,7 +1108,7 @@ const App = () => {
         const formData = new FormData()
         formData.append('file', file)
 
-        const response = await fetch('http://localhost:8000/extract-text', {
+        const response = await fetch(`${import.meta.env.VITE_API_BASE || ''}/api/extract-text`, {
           method: 'POST',
           body: formData,
         })

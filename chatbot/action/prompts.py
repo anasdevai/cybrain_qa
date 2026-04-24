@@ -2,55 +2,51 @@
 
 from backend.schemas.sop_actions import ActionRequest, JustifyRequest
 
+# Improve / Rewrite: no Qdrant/RAG — model uses only instructions + document fields + section text.
+IMPROVE_REWRITE_NO_RAG_CONTEXT = (
+    "(No RAG.) Use only SOP/section metadata and the quoted section text — no external library."
+)
+
+_SPEED = (
+    "SPEED: One pass. Return only minified JSON (no markdown, no text outside JSON). "
+    "Be concise: no filler, no extra examples."
+)
+
+_LANG = "Match input language. Keep codes and abbreviations unchanged."
+
 
 def build_improve_prompt(request: ActionRequest, context: str) -> str:
-    return f"""You are a QA/GMP expert editor.
+    return f"""GMP/QA editor — IMPROVE (light edit, same meaning).
 
-SOP: "{request.sop_title}"
-Section: "{request.section_title}" (type: {request.section_type})
+{_SPEED}
+{_LANG}
 
-Context from similar SOPs in the knowledge base:
-{context}
+SOP: "{request.sop_title}" | Section: "{request.section_title}" | Type: {request.section_type}
+Note: {context}
 
-Improve the following SOP text for GMP compliance and clarity.
-Rules:
-- Use imperative voice when actions are required.
-- Remove hedge words and ambiguity.
-- Make responsibilities and controls specific.
-- Keep the original intent.
+Rules: fix grammar; clearer active/imperative where quick; remove hedging; no new headings/steps; keep length near original.
 
-Text to improve:
+Text:
 \"\"\"{request.section_text}\"\"\"
 
-Return ONLY a valid JSON object:
-{{
-  "improved_text": "the improved text here",
-  "changes_made": ["change 1", "change 2"],
-  "compliance_note": "one-line GMP relevance note"
-}}"""
+Return ONLY: {{"improved_text": "<text>"}}"""
 
 
 def build_rewrite_prompt(request: ActionRequest, context: str) -> str:
-    return f"""You are a QA/GMP expert editor.
+    return f"""GMP/QA editor — REWRITE (full rephrase, same substance).
 
-SOP: "{request.sop_title}"
-Section: "{request.section_title}" (type: {request.section_type})
+{_SPEED}
+{_LANG}
 
-Context from similar SOPs:
-{context}
+SOP: "{request.sop_title}" | Section: "{request.section_title}" | Type: {request.section_type}
+Note: {context}
 
-Rewrite the following SOP section. Maintain the original meaning exactly.
-Improve structure, clarity, imperative voice, and logical order.
+Rules: imperative, clear order, role-anchored; no new headings; do not bloat (tight rewrite, not a longer essay).
 
-Text to rewrite:
+Text:
 \"\"\"{request.section_text}\"\"\"
 
-Return ONLY a valid JSON object:
-{{
-  "rewritten_text": "the fully rewritten section",
-  "structural_changes": ["change 1", "change 2"],
-  "rationale": "why this rewrite improves QA/GMP compliance"
-}}"""
+Return ONLY: {{"rewritten_text": "<text>"}}"""
 
 
 def build_gap_check_prompt(request: ActionRequest, context: str) -> str:

@@ -73,6 +73,17 @@
   padding: 0;
 }
 
+html {
+  height: 100%;
+}
+
+#root {
+  min-height: 100dvh;
+  min-height: 100svh;
+  display: flex;
+  flex-direction: column;
+}
+
 body {
   font-family: var(--font-sans);
   background-color: var(--bg-main);

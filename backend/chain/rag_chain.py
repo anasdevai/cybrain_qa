@@ -10,8 +10,9 @@ Two chain classes:
 import time
 import re
 import json
+import math
 from pathlib import Path
-from typing import Dict, List, Tuple
+from typing import Dict, List, Optional, Tuple, Literal
 
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.prompts import ChatPromptTemplate, HumanMessagePromptTemplate, MessagesPlaceholder
@@ -23,6 +24,7 @@ from retrieval.hybrid_retriever import HybridRetriever
 from retrieval.reranker import CrossEncoderReranker
 from retrieval.context_builder import build_context
 from retrieval.federated_retriever import FederatedRetriever
+from retrieval.hybrid_retriever import rag_unified_enabled
 from retrieval.query_router import route_query, describe_route
 from retrieval.llm_router import LLMRouter
 import os
@@ -35,6 +37,28 @@ MAX_QUERY_CHARS = int(os.getenv("GEMINI_MAX_QUERY_CHARS", "4000"))
 MAX_CONTEXT_CHARS = int(os.getenv("GEMINI_MAX_CONTEXT_CHARS", "12000"))
 MAX_HISTORY_MESSAGE_CHARS = int(os.getenv("GEMINI_MAX_HISTORY_MESSAGE_CHARS", "800"))
 MAX_HISTORY_MESSAGES = int(os.getenv("GEMINI_MAX_HISTORY_MESSAGES", "8"))
+
+
+def _json_safe_float(v, default: float = 0.0) -> float:
+    """Finite floats only; JSON cannot encode inf, -inf, or nan."""
+    try:
+        x = float(v)
+    except (TypeError, ValueError):
+        return default
+    if not math.isfinite(x):
+        return default
+    return x
+
+
+def _sanitize_citation_list(cits: List[dict]) -> List[dict]:
+    out: List[dict] = []
+    for c in cits or []:
+        if not isinstance(c, dict):
+            continue
+        d = dict(c)
+        d["score"] = round(_json_safe_float(d.get("score", 0.0)), 4)
+        out.append(d)
+    return out
 
 
 def _truncate_text(text: str, limit: int) -> str:
@@ -107,178 +131,187 @@ class HybridRAGChain:
 
 SMART_SYSTEM = """\
 You are a precise, bilingual QMS/IT Compliance AI Assistant integrated with a
-production Hybrid RAG system.
+production Hybrid RAG system (dense + BM25 retrieval, cross-encoder reranking).
 
-You have access to a structured Qdrant vector database with the following
-separate collections. You must use the correct collection based on the user's
-intent and the routed retrieval results.
+The vector store is organized by entity type. Retrieved chunks are tagged in
+context with their record metadata (ref, title, type, status). When the system
+routes to "sops", "deviations", etc., treat that as the search scope for the
+user's question. Do not mix unrelated record types unless the user asks for
+comparison or cross-reference.
+
+You have access to structured knowledge aligned to these logical collections.
+You MUST respect which collection (or combination) the retrieval step targeted.
 
 ================================================================
 COLLECTION MAP
 ================================================================
 
 Collection: "sops"
-  -> Contains: Standard Operating Procedures (SOPs)
-  -> Common fields: sop_number, title, department, status, content,
-     current_version, version_number, effective_date, review_date
-  -> Typical triggers: "SOP", "procedure", "policy", "how to",
-     "zugriffsmanagement", "patch", "firewall", "notfall",
-     "KI-Systeme", "governance"
+  Contains: Standard Operating Procedures (SOPs)
+  Fields: sop_number, title, department, SOP body text, version info when
+    present, effective_date, review_date, status
+  Triggers: "SOP", "procedure", "standard", "policy", "how to",
+    "zugriffsmanagement", "patch", "firewall", "notfall", "KI-Systeme", "governance"
+  Note: questions about a specific SOP "version" or "what the SOP says" are
+    still served from the SOP retrieval scope (chunks may include version detail).
 
 Collection: "deviations"
-  -> Contains: Deviation records and incidents
-  -> Common fields: deviation_number, title, description_text,
-     root_cause_text, impact_level, external_status, event_date
-  -> Typical triggers: "deviation", "incident", "issue", "problem",
-     "DEV-", "breach", "excursion", "fehler", "abweichung", "kritisch"
+  Contains: Deviation records and incidents
+  Fields: deviation_number, title, description_text, root_cause_text,
+    impact_level, external_status, event_date
+  Triggers: "deviation", "incident", "issue", "problem", "DEV-",
+    "breach", "excursion", "fehler", "abweichung", "kritisch"
 
 Collection: "capas"
-  -> Contains: Corrective and Preventive Actions
-  -> Common fields: capa_number, title, action_text, external_status
-  -> Typical triggers: "CAPA", "corrective action", "preventive action"
+  Contains: Corrective and Preventive Actions
+  Fields: capa_number, title, action_text, external_status, effectiveness
+  Triggers: "CAPA", "corrective action", "preventive action"
 
 Collection: "audits"
-  -> Contains: Audit findings
-  -> Common fields: audit_number, finding_number, finding_text,
-     acceptance_status
-  -> Typical triggers: "audit", "finding", "inspection"
+  Contains: Audit findings
+  Fields: finding / audit identifiers, finding_text, acceptance_status
+  Triggers: "audit", "finding", "inspection", "AUDIT-"
 
 Collection: "decisions"
-  -> Contains: Decisions, rationales, and conclusions
-  -> Common fields: decision_number, title, decision_statement,
-     rationale_text, final_conclusion
-  -> Typical triggers: "decision", "rationale", "conclusion", "approval"
+  Contains: Decisions, rationales, conclusions
+  Fields: decision_number, title, decision_statement, rationale_text, final_conclusion
+  Triggers: "decision", "rationale", "conclusion", "approval", "DEC-"
 
 ================================================================
 RULES YOU MUST ALWAYS FOLLOW
 ================================================================
 
-RULE 1 - COLLECTION ROUTING
-Before answering, identify which collection or collections were searched.
-Do not merge facts from different collections unless the user explicitly asks
-for a comparison or cross-reference.
+RULE 1 — COLLECTION ROUTING
+Before answering, state which collection(s) the retrieved context came from.
+Never merge data across collections unless the user explicitly asks for a
+cross-reference or comparison.
 
-RULE 2 - EXACT IDENTIFIER MATCHING
-When the user mentions a specific identifier such as "SOP-IT-001",
-"DEV-IT-401", "CAPA-123", "AUDIT-22", or "DEC-77", prioritize exact record
-matching over semantic similarity. If an exact identifier is present, treat it
-as the highest-priority anchor for the answer.
+RULE 2 — EXACT POINT MATCHING
+When the user names a specific ID (e.g. SOP-IT-001, DEV-IT-401, CAPA-…,
+AUDIT-…, DEC-…), treat that as the primary anchor. Prefer facts from the
+retrieved chunk(s) for that record over pure semantic guesswork.
+(The retrieval layer may use metadata such as ref_number; your job is to
+answer from the provided context.)
 
-RULE 3 - VISIBLE REASONING SUMMARY
-Before the final answer, provide a short [REASONING] block that states:
+RULE 3 — CHAIN OF THOUGHT
+Before the final answer you MUST output a [REASONING] block. In it, briefly:
   (a) what the user is asking
-  (b) which collection or collections were searched
-  (c) whether an exact identifier or prior-conversation reference was used
-  (d) how the answer will be structured
-Keep this brief and factual.
+  (b) which collection(s) the retrieved context represents
+  (c) any exact identifiers or conversation-memory references to apply
+  (d) how you will structure the [ANSWER]
+Then output [ANSWER], then [CONFIDENCE], then the required machine blocks.
 
-RULE 4 - CITATIONS
-Every factual claim must be backed by a citation tag such as
-[SOP-IT-001], [DEV-IT-401], [CAPA-22], [AUDIT-7], or [DEC-15].
-Do not state unsupported facts. If a claim cannot be cited from retrieved
-records, omit it.
+RULE 4 — CITATIONS
+Every factual claim MUST cite a source using bracket tags, e.g.
+[SOP-IT-001], [DEV-IT-401], [CAPA-22], [AUDIT-7], [DEC-15].
+If you cannot cite it from the retrieved context, do not state it.
 
-RULE 5 - CONVERSATION MEMORY
-Use the conversation history to resolve references such as
-"that deviation", "the same SOP", "the previous answer", or
-"the one we just discussed". Do not ask the user to repeat information that
-is already clear from the conversation history.
+RULE 5 — CONVERSATION MEMORY
+Resolve references like "that deviation", "the same SOP", "the previous
+answer" using the conversation history. Do not ask the user to repeat
+what is already established in the thread.
 
-RULE 6 - IMPACT AND STATUS AWARENESS
-When discussing deviations, always surface impact_level and current status.
-Highlight Critical and Major deviations with a warning marker.
-When discussing SOPs, CAPAs, audits, or decisions, report status only if the
-retrieved record actually provides it.
+RULE 6 — IMPACT LEVEL AWARENESS
+For deviations, always mention impact_level when the data provides it.
+Priority: Critical > Major > Moderate > Minor.
+For Critical and Major, prefix the line with a warning marker (use the warning emoji).
+Flag Critical and Major explicitly.
 
-RULE 7 - BILINGUAL HANDLING
-The knowledge base may contain both German and English content. Interpret the
-user's intent across both languages and answer in the same language the user
-used unless the user explicitly asks for translation.
+RULE 7 — BILINGUAL HANDLING
+Documents may be German and/or English. Match the user language in your reply
+unless they ask for a translation.
 
-RULE 8 - CROSS-REFERENCE DETECTION
-If the user asks about a deviation, CAPA, audit finding, or decision and the
-retrieved records clearly indicate a related SOP or related record, surface that
-link as a cross-reference. Use this format when relevant:
-[RELATED SOP: SOP-XX-XXX - title]
+RULE 8 — STATUS AWARENESS
+Report current status when the context includes it (e.g. open / closed for
+deviations; effective / draft for SOP-related status when shown). Never
+present a closed record or obsolete version as active if the context says otherwise.
 
-RULE 9 - MISSING DATA DISCIPLINE
-Never invent missing fields, dates, root causes, statuses, departments, or
-version details. If a field is null, absent, or not present in the retrieved
-records, say that it is not available in the current data.
+RULE 9 — CROSS-REFERENCE DETECTION
+If the context links a deviation, CAPA, audit, or decision to a governing SOP
+or related record, surface it as:
+[RELATED SOP: SOP-XX-XXX — short title]
+when supported by the retrieved text.
 
-RULE 10 - REFUSAL RULE
-If the retrieved context does not contain enough information to answer
-confidently, say:
+RULE 10 — REFUSAL RULE
+If the retrieved context is insufficient, say:
 "The available records do not contain sufficient detail to answer this
 question. Please check the relevant collection or provide more context."
-Do not hallucinate.
+Never invent null fields, dates, or root causes.
 """
 
 SMART_USER = """\
-## {history_focus}
+{history_focus}
 
+────────────────────────────────────────
 CONVERSATION HISTORY:
-(Loaded implicitly via message sequence)
+(Carried in the message list before this user turn; use it for follow-ups.)
 
-----------------------------------------
+────────────────────────────────────────
 RETRIEVED CONTEXT:
 {context}
 
-----------------------------------------
+────────────────────────────────────────
 USER QUESTION:
 {question}
 
-----------------------------------------
+────────────────────────────────────────
 INSTRUCTIONS FOR THIS RESPONSE:
 
-STEP 1 - [REASONING]
-Answer these briefly before the final answer:
-  - What is the user asking?
-  - Which collection or collections were searched, and why?
-  - Did I use an exact identifier or a conversation-memory reference?
-  - What status, impact level, or version detail is relevant?
-  - Are there any cross-record links worth surfacing?
+STEP 1 — [REASONING]  (required; always show this block first)
+Answer each point briefly before [ANSWER]:
+  • What is the user asking? (one sentence)
+  • Which collection(s) does the retrieved context correspond to, and why?
+  • Any exact ID in the question or history? Which field/record?
+  • Any reference to earlier messages to resolve?
+  • Impact level / status for the records involved (if applicable)?
+  • Any cross-collection links to surface?
 
-STEP 2 - [ANSWER]
-  - Answer directly and completely.
-  - Cite every factual claim with bracket notation:
+STEP 2 — [ANSWER]
+  • Answer directly and completely.
+  • Cite every fact with bracket notation, e.g.
     [SOP-IT-001], [DEV-IT-401], [CAPA-22], [AUDIT-7], [DEC-15]
-  - For Critical or Major deviations, prepend a warning marker.
-  - If a related SOP clearly governs the topic, add:
-    [RELATED SOP: SOP-XX-XXX - title]
-  - If a question is about a version and the retrieved data provides version
-    information, include it in the citation when possible.
+  • For deviations with impact_level Critical or Major, start that bullet or
+    sentence with the warning emoji (warning marker).
+  • If a related SOP governs the topic, add a line:
+    [RELATED SOP: SOP-XX-XXX — title]
+  • If version or effective date appears in the context, you may include it
+    in the citation line, e.g. [SOP-QA-010 v4.0 | effective: YYYY-MM-DD]
 
-  Use this structure for complex answers:
+  For non-trivial answers, use this structure (plain text, no markdown tables):
   Summary: one short paragraph
-  Details: concise bullets with citations
-  Status: current record state when available
-  Cross-refs: related SOPs, deviations, CAPAs, audits, or decisions
+  Details: bullet lines, each with citations
+  Status: current status / impact when known from context
+  Cross-refs: related SOPs, deviations, CAPAs, audits, or decisions if grounded in context
 
-STEP 3 - [CONFIDENCE]
-State one of:
-  - HIGH: exact record found via identifier or unmistakable exact match
-  - MEDIUM: semantic match found, manual verification recommended
-  - LOW: insufficient data, refusal rule applies
+  Do not use markdown headings (no #), bold, tables, or code fences.
+  Stay within 400 words unless the user explicitly asks for full detail.
+  End the [ANSWER] section with a line:
+  Sources: list every cited record ID in brackets, comma-separated
+  (You may prefix that line with 📎 for example: "📎 Sources: [SOP-IT-001], [DEV-IT-401]")
 
-----------------------------------------
-FORMAT RULES:
-  - Never use vague wording like "the document mentions" when a record ID can
-    be named directly.
-  - Never present null or missing fields as populated.
-  - Keep the answer concise unless the user explicitly asks for full detail.
-  - Do not use Markdown headings, bold markers, tables, or code fences.
-  - Return clean plain text with simple labels and line breaks only.
-  - End with a Sources line listing every cited record ID.
+STEP 3 — [CONFIDENCE]
+  One line, e.g.:
+  [CONFIDENCE] HIGH — exact record aligned with an identifier in context;
+  or MEDIUM — semantic match, recommend verification;
+  or LOW — insufficient data; refusal rule applies.
 
-## REQUIRED SYSTEM PARSING BLOCKS
+────────────────────────────────────────
+FORMAT RULES
+  Do not use vague phrasing like "the document mentions" when you can name
+  [SOP-…] or [DEV-…] from context.
+  Do not present null or missing fields as if they were populated.
+  Do not use markdown headings, bold markers, tables, or code fences.
+
+After [CONFIDENCE], you MUST append the following machine-readable blocks
+exactly (the application parses them). List each cited source once in
+---CITATIONS---; then three to four follow-up questions in JSON.
 
 ---CITATIONS---
 [[REF_ID|Document Title|Type|One sentence excerpt]]
 [[REF_ID|Document Title|Type|One sentence excerpt]]
 
 ---SUGGESTIONS---
-["Follow-up question 1 using doc IDs", "Follow-up question 2", "Follow-up question 3"]
+["Follow-up using record IDs from context", "Second follow-up", "Third follow-up"]
 """
 
 
@@ -314,7 +347,7 @@ def _build_unified_context(docs: List[Document], prefix_label: str) -> Tuple[str
             "title":  title,
             "type":   doc_type,
             "status": status,
-            "score":  round(float(meta.get("rerank_score", 0.0)), 4),
+            "score":  round(_json_safe_float(meta.get("rerank_score", 0.0)), 4),
         })
         total += len(text)
 
@@ -415,72 +448,191 @@ from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
 from langchain_core.prompts import HumanMessagePromptTemplate, MessagesPlaceholder
 
 
-def _is_sop_count_or_list_query(query: str, target_sections: List[str]) -> bool:
-    """Detect strict SOP inventory intent to avoid LLM hallucinated counts."""
-    q = query.lower().strip()
-    if target_sections != ["sops"]:
-        return False
-    has_sop = "sop" in q
-    asks_count = any(k in q for k in ["how many", "count", "number of", "total", "kitne"])
-    asks_list = any(k in q for k in ["list", "show all", "all sops", "which sops", "what sops", "have"])
-    return has_sop and (asks_count or asks_list)
+def _classify_sop_inventory_query(query: str) -> Optional[Literal["count", "list"]]:
+    """
+    Detects SOP inventory questions so we can return a deterministic count/list
+    without LLM drift. "count" = how many; "list" = enumerate SOPs.
+    """
+    q = (query or "").lower()
+    if not re.search(
+        r"\b(sop|sops|standard operating procedures?)\b",
+        q,
+        re.IGNORECASE,
+    ):
+        return None
+    has_list_intent = bool(
+        re.search(
+            r"\b(list all|list every|show all|show me all|get all|name all|enumerate|all sops|every sop)\b",
+            q,
+        )
+    ) or bool(re.search(r"\b(list|show)\b.+\b(sop|sops)\b", q)) or bool(
+        re.search(r"\b(which|what) sops\b", q)
+    )
+    has_count_intent = any(
+        p in q
+        for p in (
+            "how many",
+            "how much",
+            "number of",
+            "total",
+            "count ",
+            " count",
+            "quantity",
+            "sop count",
+        )
+    )
+    if re.search(r"\bkitne\b", q):
+        has_count_intent = True
+    if re.search(r"\b(how many sops|count sops|sop count|number of sops|total sops)\b", q):
+        has_count_intent = True
+    if re.search(
+        r"\b(do we have|have we|is there|are there)\b", q
+    ) and re.search(r"\b(sop|sops)\b", q):
+        has_count_intent = True
+
+    if has_list_intent and not has_count_intent:
+        return "list"
+    if has_count_intent and not has_list_intent:
+        return "count"
+    if has_list_intent and has_count_intent:
+        if re.search(r"\bhow many\b", q) or re.search(
+            r"\b(number|count|total) of\b", q
+        ):
+            return "count"
+        return "list"
+    if re.search(
+        r"\b(available|exist|in the (system|index|database))\b", q
+    ) and re.search(r"\bwhich\b.*\b(sop|sops)\b", q):
+        return "list"
+    if re.search(r"\b(available|exist|inventory)\b", q) and re.search(
+        r"\b(how many|count|number)\b", q
+    ):
+        return "count"
+    return None
 
 
-def _strict_sop_inventory_response(docs: List[Document], query: str, retriever: HybridRetriever | None = None) -> dict:
-    """Build deterministic SOP inventory response from the SOP corpus."""
-    inventory_docs = docs
+def _strict_sop_inventory_response(
+    docs: List[Document],
+    query: str,
+    retriever: HybridRetriever | None = None,
+    mode: Literal["count", "list"] = "list",
+) -> dict:
+    """Build deterministic SOP inventory from the SOP section corpus (deduped by SOP id)."""
+    inventory_docs: List[Document] = list(docs or [])
     if retriever is not None:
         try:
             corpus_docs, _ = retriever._get_bm25_corpus()
             if corpus_docs:
                 inventory_docs = corpus_docs
         except Exception:
-            inventory_docs = docs
+            pass
 
-    rows = []
-    seen = set()
+    rows: List[Tuple[str, str, str]] = []
+    seen: set = set()
     for doc in inventory_docs:
         meta = doc.metadata or {}
-        ref = meta.get("ref_number") or meta.get("sop_number") or meta.get("source_id") or ""
+        et = str(meta.get("entity_type", "")).lower()
+        if rag_unified_enabled() and et and et != "sop":
+            continue
+        ref = (
+            (meta.get("ref_number") or meta.get("sop_number") or meta.get("source_id"))
+            or ""
+        )
+        if not ref and meta.get("entity_id"):
+            ref = f"id:{str(meta.get('entity_id'))[:8]}"
         title = meta.get("title") or "Untitled SOP"
         status = meta.get("status") or "Unknown"
         page_content = (doc.page_content or "").strip()
 
-        if not ref and page_content:
+        if (not ref or ref.startswith("id:")) and page_content:
             first_line = page_content.splitlines()[0].strip()
             if " - " in first_line:
                 maybe_ref, maybe_title = first_line.split(" - ", 1)
-                if maybe_ref.strip():
+                if maybe_ref.strip() and not maybe_ref.strip().lower().startswith(
+                    "id:"
+                ):
                     ref = maybe_ref.strip()
                 if maybe_title.strip() and title == "Untitled SOP":
                     title = maybe_title.strip()
 
-        dedupe_key = ref or title
+        eid = str(meta.get("entity_id") or "").lower()
+        dedupe_key = f"{eid}|{(ref or '').lower()}" if eid else f"r|{(ref or title).lower()}"
         if dedupe_key in seen:
             continue
         seen.add(dedupe_key)
-        rows.append((ref or title, title, status))
+        display_ref = ref or title
+        rows.append((display_ref, title, status))
 
-    rows = sorted(rows, key=lambda x: x[0])
+    rows = sorted(rows, key=lambda x: (x[0] or "").lower())
     total = len(rows)
-    key_points = "\n".join([f"- {ref}: {title} [{status}]" for ref, title, status in rows])
-    sources_lines = "\n".join(
-        [f"- {ref}: {title} (SOP, Inventory match)" for ref, title, _ in rows]
+    list_cap = int(os.getenv("SOP_INVENTORY_LIST_MAX", "50"))
+
+    if mode == "count":
+        if total == 0:
+            count_answer = (
+                "Summary: No SOPs were found in the current search index. "
+                "The index may be empty or SOPs may not be embedded yet.\n\n"
+                "If you need a list, ask: “List all SOPs” after indexing has completed."
+            )
+        else:
+            count_answer = (
+                f"Summary: The search index currently contains {total} distinct SOP(s). "
+                f"That number is a count of unique SOP record references (SOP id / number) "
+                f"in the indexed SOP data, not the number of text chunks.\n\n"
+                f"If you need the full list with titles, ask: “List all SOPs”."
+            )
+        return {
+        "answer": count_answer,
+        "citations": [
+            {
+                "ref": f"INDEX-SOP-COUNT({total})",
+                "title": "Indexed SOP inventory",
+                "type": "sop",
+                "excerpt": f"Distinct SOPs in SOP index: {total}.",
+            }
+        ],
+        "suggestions": [
+            "List all SOPs with titles and status",
+            "What does SOP-IT-001 cover?",
+            "Which SOPs mention access control?",
+        ],
+        "retrieval_stats": {},
+        "routed_to": "SOPs (strict count)",
+        "cached": False,
+        "metadata_snapshot": [],
+        "audit_log_snapshot": [],
+        "action_metadata": {
+            "query": query,
+            "routing": ["sops"],
+            "latency_ms": 0.0,
+            "timestamp": time.time(),
+            "model": "deterministic",
+            "strict_mode": "sop_inventory_count",
+        },
+    }
+
+    key_points = "\n".join(
+        [f"- {ref}: {title} [{status}]" for ref, title, status in rows[:list_cap]]
     )
-    citations = [{"ref": ref, "title": title, "type": "SOP", "excerpt": f"Status: {status}"} for ref, title, status in rows]
+    if total > list_cap:
+        key_points += f"\n- … and {total - list_cap} more (truncated; increase SOP_INVENTORY_LIST_MAX to show more in list mode)."
+    sources_lines = "\n".join(
+        [f"- {ref}: {title} (SOP)" for ref, title, _ in rows[:list_cap]]
+    )
+    citations = [
+        {"ref": ref, "title": title, "type": "SOP", "excerpt": f"Status: {status}"}
+        for ref, title, status in rows[: list_cap * 2]
+    ][:200]
     suggestions = [
-        "Show details for SOP-IT-001",
-        "Compare SOP statuses across all SOPs",
+        "How many SOPs are in the index?",
+        "Show details for a specific SOP by number",
         "Find SOPs related to access control",
     ]
 
     answer = (
-        f"Direct Answer:\nThere are {total} SOPs in the indexed SOP dataset.\n\n"
-        "Details:\n"
-        f"{key_points if key_points else '- No SOPs found in the current index.'}\n\n"
-        f"Summary:\nThe SOP inventory currently contains {total} unique SOP records.\n\n"
-        "Sources:\n"
-        f"{sources_lines if sources_lines else '- No records found.'}"
+        f"Summary: There are {total} unique SOP record(s) in the indexed SOP data.\n\n"
+        f"List:\n{key_points if key_points else 'No SOPs found in the current index.'}\n\n"
+        f"Documents:\n{sources_lines if sources_lines else 'None.'}"
     )
 
     return {
@@ -560,27 +712,47 @@ class SmartRAGChain:
 
     def invoke(self, query: str, category: str = None, chat_history: List[Dict] = None) -> dict:
         t0 = time.time()
-        
+
+        cat_norm = (category or "").strip().lower()
+        sop_inventory_mode: Optional[Literal["count", "list"]] = None
+        if (not cat_norm) or cat_norm == "sops":
+            sop_inventory_mode = _classify_sop_inventory_query(query)
+
         # ── Step 0: Extract Metadata Filters & Active Doc ID ──
         metadata_filters = self._extract_metadata_filters(query)
         active_doc_id = self._find_active_doc_id(chat_history) if chat_history else ""
-        if active_doc_id:
+        if active_doc_id and not sop_inventory_mode:
             print(f"  [context] identified active doc from history: {active_doc_id}")
-            # If active_doc_id found, ensure it's in the filters if the query targets that type
-            is_sop_query = any(k in query.lower() for k in ["sop", "procedure", "standard"])
+            is_sop_query = any(
+                k in (query or "").lower() for k in ["sop", "procedure", "standard"]
+            )
             if active_doc_id.startswith("SOP") and is_sop_query:
                 metadata_filters["ref_number"] = active_doc_id
+        if sop_inventory_mode == "count" and not re.search(
+            r"\bSOP-[A-Z0-9-]+\b", query or "", re.IGNORECASE
+        ):
+            metadata_filters.pop("ref_number", None)
 
-        print(f"  [filters] extracted: {metadata_filters}")
+        print(
+            f"  [filters] extracted: {metadata_filters} | sop_inventory_mode: {sop_inventory_mode}"
+        )
 
         # ── Step 1: Route query using LLM Router (Prompt 3) ──
-        if category and category.strip().lower() in {"sops", "deviations", "capas", "audits", "decisions"}:
+        if category and category.strip().lower() in {
+            "sops",
+            "deviations",
+            "capas",
+            "audits",
+            "decisions",
+        }:
             target_sections = [category.strip().lower()]
-            route_data = {"collections": target_sections, "exact_filters": metadata_filters}
+            route_data = {"collections": target_sections, "exact_filters": dict(metadata_filters)}
+        elif sop_inventory_mode:
+            target_sections = ["sops"]
+            route_data = {"collections": ["sops"], "exact_filters": dict(metadata_filters)}
         else:
             route_data = self.router.route(query)
             target_sections = route_data.get("collections", [])
-            # Merge router filters with manually extracted ones
             metadata_filters.update(route_data.get("exact_filters", {}))
 
         routed_label = describe_route(target_sections)
@@ -596,6 +768,10 @@ class SmartRAGChain:
             try:
                 # Apply metadata filters (if any)
                 retriever.metadata_filters = metadata_filters
+                if rag_unified_enabled():
+                    retriever.category_filter = section
+                else:
+                    retriever.category_filter = None
                 # Deep retrieval: fetch 30 to allow for deduplication/diversification
                 docs = retriever.invoke(query)
                 
@@ -620,20 +796,43 @@ class SmartRAGChain:
                 per_section_counts[section] = 0
 
         if not all_docs:
+            if sop_inventory_mode:
+                strict_resp = _strict_sop_inventory_response(
+                    [],
+                    query,
+                    self.federated.retrievers.get("sops"),
+                    mode=sop_inventory_mode,
+                )
+                strict_resp["retrieval_stats"] = {
+                    "searched": target_sections,
+                    "per_section": per_section_counts,
+                    "total_docs": 0,
+                    "latency_ms": round((time.time() - t0) * 1000, 1),
+                    "strict_mode": True,
+                }
+                return strict_resp
             return {
-                "answer":          "No relevant information found in the knowledge base for your query.",
-                "citations":       [],
-                "suggestions":     ["Ask about a specific SOP number", "Search for related deviations", "Check CAPA status"],
-                "retrieval_stats": {"searched": target_sections, "total_docs": 0, "latency_ms": round((time.time()-t0)*1000, 1)},
-                "routed_to":       routed_label,
+                "answer": "No relevant information found in the knowledge base for your query.",
+                "citations": [],
+                "suggestions": [
+                    "Ask about a specific SOP number",
+                    "Search for related deviations",
+                    "Check CAPA status",
+                ],
+                "retrieval_stats": {
+                    "searched": target_sections,
+                    "total_docs": 0,
+                    "latency_ms": round((time.time() - t0) * 1000, 1),
+                },
+                "routed_to": routed_label,
             }
 
-        # ── Strict deterministic path for SOP inventory queries ──
-        if _is_sop_count_or_list_query(query, target_sections):
+        if sop_inventory_mode:
             strict_resp = _strict_sop_inventory_response(
                 all_docs,
                 query,
                 self.federated.retrievers.get("sops"),
+                mode=sop_inventory_mode,
             )
             strict_resp["retrieval_stats"] = {
                 "searched": target_sections,
@@ -702,7 +901,9 @@ class SmartRAGChain:
                 "type":    lc.get("type", match.get("type","") if match else ""),
                 "excerpt": lc.get("excerpt", ""),
                 "status":  match.get("status","") if match else "",
-                "score":   match.get("score", 0.0) if match else 0.0,
+                "score":   _json_safe_float(
+                    (match.get("score", 0.0) if match else 0.0)
+                ),
             }
             if ref not in used_refs:
                 final_citations.append(entry)
@@ -711,6 +912,7 @@ class SmartRAGChain:
         # Fall back to raw citations if LLM did not produce any
         if not final_citations:
             final_citations = raw_cits
+        final_citations = _sanitize_citation_list(final_citations)
 
         # ── Step 6: Assemble full Audit Vault snapshots ──
 

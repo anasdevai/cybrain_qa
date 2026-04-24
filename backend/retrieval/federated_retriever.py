@@ -18,6 +18,8 @@ import asyncio
 from typing import Dict, List
 
 from langchain_core.documents import Document
+
+from retrieval.hybrid_retriever import rag_unified_enabled
 from langchain_qdrant import QdrantVectorStore
 from qdrant_client import QdrantClient
 
@@ -79,6 +81,10 @@ class FederatedRetriever:
         try:
             retriever = self.retrievers[section]
             retriever.metadata_filters = metadata_filters
+            if rag_unified_enabled():
+                retriever.category_filter = section
+            else:
+                retriever.category_filter = None
             return retriever.invoke(query)
         except Exception as e:
             print(f"  [federated] Warning: retrieval failed for '{section}': {e}")

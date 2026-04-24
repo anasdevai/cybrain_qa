@@ -2,7 +2,10 @@ fastapi
 uvicorn
 sqlalchemy
 psycopg2-binary
+psycopg[binary]>=3.1.0
+python-multipart>=0.0.6
 python-dotenv
+pypdf>=4.0.0
 httpx
 python-jose
 passlib[bcrypt]

@@ -12,7 +12,11 @@ from langchain_qdrant import QdrantVectorStore
 from qdrant_client import QdrantClient
 
 from embeddings.embedder import get_embedder
-from retrieval.hybrid_retriever import HybridRetriever
+from retrieval.hybrid_retriever import (
+    HybridRetriever,
+    rag_unified_enabled,
+    unified_semantic_collection,
+)
 from retrieval.reranker import CrossEncoderReranker
 
 load_dotenv(Path(__file__).resolve().parents[2] / ".env", override=False)
@@ -46,7 +50,7 @@ def _get_action_llm(temperature: float = 0.2) -> ChatGoogleGenerativeAI:
     return ChatGoogleGenerativeAI(
         model=os.getenv("GEMINI_ACTION_MODEL", os.getenv("GEMINI_MODEL", "gemini-2.5-flash")),
         temperature=temperature,
-        max_output_tokens=int(os.getenv("GEMINI_ACTION_MAX_OUTPUT_TOKENS", os.getenv("GEMINI_MAX_OUTPUT_TOKENS", "768"))),
+        max_output_tokens=int(os.getenv("GEMINI_ACTION_MAX_OUTPUT_TOKENS") or "4096"),
         google_api_key=os.getenv("GOOGLE_API_KEY"),
         max_retries=3,
         thinking_budget=int(os.getenv("GEMINI_ACTION_THINKING_BUDGET", "128")),
@@ -57,7 +61,7 @@ def _get_action_fallback_llm(temperature: float = 0.2) -> ChatGoogleGenerativeAI
     return ChatGoogleGenerativeAI(
         model=os.getenv("GEMINI_ACTION_FALLBACK_MODEL", os.getenv("GEMINI_FALLBACK_MODEL", "gemini-1.5-flash")),
         temperature=temperature,
-        max_output_tokens=int(os.getenv("GEMINI_ACTION_MAX_OUTPUT_TOKENS", os.getenv("GEMINI_MAX_OUTPUT_TOKENS", "768"))),
+        max_output_tokens=int(os.getenv("GEMINI_ACTION_MAX_OUTPUT_TOKENS") or "4096"),
         google_api_key=os.getenv("GOOGLE_API_KEY"),
         max_retries=2,
         thinking_budget=int(os.getenv("GEMINI_ACTION_FALLBACK_THINKING_BUDGET", "64")),
@@ -71,7 +75,12 @@ def build_action_runtime(
     reranker: CrossEncoderReranker,
     collection_name: str | None = None,
 ) -> ActionRuntime:
-    collection = collection_name or os.getenv("COLLECTION_SOPS", "docs_sops")
+    if collection_name:
+        collection = collection_name
+    elif rag_unified_enabled():
+        collection = unified_semantic_collection()
+    else:
+        collection = os.getenv("COLLECTION_SOPS", "docs_sops")
     vectorstore = QdrantVectorStore(client=client, collection_name=collection, embedding=embedder)
     retriever = HybridRetriever(
         vectorstore=vectorstore,
@@ -81,6 +90,8 @@ def build_action_runtime(
         bm25_top_k=int(os.getenv("ACTION_BM25_TOP_K", "8")),
         final_top_k=int(os.getenv("ACTION_FINAL_TOP_K", "4")),
     )
+    if rag_unified_enabled():
+        retriever.category_filter = "sops"
     return ActionRuntime(
         client=client,
         embedder=embedder,

@@ -10,10 +10,6 @@ export default defineConfig({
         target: 'http://localhost:8000',
         changeOrigin: true,
       },
-      '/extract-text': {
-        target: 'http://localhost:8000',
-        changeOrigin: true,
-      }
-    }
-  }
+    },
+  },
 })

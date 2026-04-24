@@ -240,6 +240,7 @@ export default function ChatPage() {
               : null
           }
           onSendMessage={handleSendMessage}
+          isAwaitingResponse={isSending}
         />
       </div>
     </div>

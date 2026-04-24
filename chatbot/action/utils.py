@@ -11,7 +11,15 @@ from fastapi import HTTPException
 from langchain_core.documents import Document
 from pydantic import ValidationError
 
-from backend.schemas.sop_actions import ConvertResponse
+from backend.schemas.sop_actions import (
+    ConvertResponse,
+    GapCheckResponse,
+    ImproveResponse,
+    RewriteResponse,
+)
+
+
+ACTION_CONTEXT_EXCERPT_CHARS = 350
 
 
 def utc_now_iso() -> str:
@@ -25,9 +33,50 @@ def clean_json(raw: str) -> str:
     return raw
 
 
+def _load_first_json_object(raw: str) -> dict[str, Any]:
+    """
+    Parse the first complete JSON object from a model response (ignore prose after it).
+    Uses JSONDecoder.raw_decode so trailing garbage does not break parsing.
+    """
+    s = clean_json(raw)
+    start = s.find("{")
+    if start < 0:
+        raise json.JSONDecodeError("no JSON object in model output", s, 0)
+    decoder = json.JSONDecoder()
+    data, _end = decoder.raw_decode(s, start)
+    if not isinstance(data, dict):
+        raise TypeError("JSON root must be an object")
+    return data
+
+
+def _coerce_model(data: dict[str, Any], schema: type[Any]) -> Any:
+    if hasattr(schema, "model_validate"):
+        return schema.model_validate(data)
+    return schema(**data)  # type: ignore[call-arg]
+
+
+def _plaintext_single_key_fallback(raw: str, schema: type[Any]) -> Any:
+    """When the model returns the answer without JSON braces (rare but valid for power users)."""
+    text = clean_json(raw).strip()
+    if not text or text[0] in ("{", "["):
+        raise ValueError("not plaintext fallback")
+    if schema is ImproveResponse:
+        return ImproveResponse(improved_text=text)
+    if schema is RewriteResponse:
+        return RewriteResponse(rewritten_text=text)
+    if schema is GapCheckResponse:
+        return GapCheckResponse(analysis=text)
+    raise ValueError("not single-key schema")
+
+
 def parse_model_output(raw: str, schema: type[Any]) -> Any:
-    data = json.loads(clean_json(raw))
-    return schema(**data)
+    if not (raw and raw.strip()):
+        raise ValueError("empty model output")
+    t = clean_json(raw).lstrip()
+    if schema in (ImproveResponse, RewriteResponse, GapCheckResponse) and not t.startswith(("{", "[")):
+        return _plaintext_single_key_fallback(raw, schema)
+    data = _load_first_json_object(raw)
+    return _coerce_model(data, schema)
 
 
 def parse_with_retry(
@@ -64,19 +113,41 @@ def parse_with_retry(
         parsed = parse_model_output(retry_raw, schema)
         audit_log.append({"event": "parse_success", "attempt": 2, "timestamp": utc_now_iso()})
         return parsed
-    except (json.JSONDecodeError, ValidationError, TypeError, ValueError) as exc:
+    except (json.JSONDecodeError, ValidationError, TypeError, ValueError) as exc2:
         audit_log.append(
             {
                 "event": "parse_failed",
                 "attempt": 2,
                 "timestamp": utc_now_iso(),
-                "error": str(exc),
+                "error": str(exc2),
+            }
+        )
+
+    strict_prompt = (
+        prompt
+        + "\n\nCRITICAL JSON RULES (long text): Return exactly one JSON object. "
+        "String values must be valid JSON strings: use \\n for newlines, \\\" for quotes, \\\\ for backslashes. "
+        "Do not truncate. No markdown. No text before or after the JSON object."
+    )
+    third_raw = call_llm(strict_prompt)
+    audit_log.append({"event": "llm_retry", "attempt": 3, "timestamp": utc_now_iso()})
+    try:
+        parsed = parse_model_output(third_raw, schema)
+        audit_log.append({"event": "parse_success", "attempt": 3, "timestamp": utc_now_iso()})
+        return parsed
+    except (json.JSONDecodeError, ValidationError, TypeError, ValueError) as exc3:
+        audit_log.append(
+            {
+                "event": "parse_failed",
+                "attempt": 3,
+                "timestamp": utc_now_iso(),
+                "error": str(exc3),
             }
         )
         raise HTTPException(
             status_code=422,
             detail="AI output did not match required schema after retry. Please try again.",
-        ) from exc
+        ) from exc3
 
 
 def validate_convert_response(parsed: ConvertResponse) -> None:

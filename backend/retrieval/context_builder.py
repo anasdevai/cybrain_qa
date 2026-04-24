@@ -1,3 +1,4 @@
+import math
 from langchain_core.documents import Document
 from typing import List, Tuple
 
@@ -27,7 +28,11 @@ def build_context(docs: List[Document]) -> Tuple[str, List[dict]]:
         status    = meta.get("status", "")
         eff_date  = meta.get("effective_date", "")
         rev_date  = meta.get("review_date", "")
-        rerank_sc = meta.get("rerank_score", 0.0)
+        try:
+            rs = float(meta.get("rerank_score", 0.0))
+            rerank_sc = rs if math.isfinite(rs) else 0.0
+        except (TypeError, ValueError):
+            rerank_sc = 0.0
 
         # Build a rich header for the context block so the LLM has full SOP context
         header_parts = []
@@ -55,7 +60,7 @@ def build_context(docs: List[Document]) -> Tuple[str, List[dict]]:
                 "effective_date": eff_date,
                 "review_date":    rev_date,
             },
-            "rerank_score": round(float(rerank_sc), 4),
+            "rerank_score": round(rerank_sc, 4),
         })
 
         total += len(snippet)

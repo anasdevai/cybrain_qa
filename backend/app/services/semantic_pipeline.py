@@ -196,15 +196,19 @@ class SemanticPipelineService:
                 vectors_config=qmodels.VectorParams(size=dim, distance=qmodels.Distance.COSINE),
             )
         # Cloud Qdrant can require payload indexes for filtered query performance/validity.
-        try:
-            client.create_payload_index(
-                collection_name=DEFAULT_COLLECTION,
-                field_name="entity_type",
-                field_schema=qmodels.PayloadSchemaType.KEYWORD,
-            )
-        except Exception:
-            # Index may already exist; keep indexing flow idempotent.
-            pass
+        for _field, _typ in (
+            ("entity_type", qmodels.PayloadSchemaType.KEYWORD),
+            ("entity_id", qmodels.PayloadSchemaType.KEYWORD),
+        ):
+            try:
+                client.create_payload_index(
+                    collection_name=DEFAULT_COLLECTION,
+                    field_name=_field,
+                    field_schema=_typ,
+                )
+            except Exception:
+                # Index may already exist; keep indexing flow idempotent.
+                pass
 
     @staticmethod
     def _normalize_entity(db: Session, entity_type: str, entity_id: uuid.UUID, version_id: uuid.UUID | None):
@@ -294,6 +298,80 @@ class SemanticPipelineService:
         return [], None
 
     @staticmethod
+    def _doc_type_for_entity(entity_type: str) -> str:
+        m = {
+            "sop": "sop",
+            "deviation": "deviation",
+            "capa": "capa",
+            "audit_finding": "audit",
+            "decision": "decision",
+        }
+        return m.get(entity_type, entity_type or "")
+
+    @staticmethod
+    def _entity_rag_fields(db: Session, entity_type: str, entity_id: uuid.UUID) -> dict:
+        if entity_type == "sop":
+            sop = db.query(SOP).filter(SOP.id == entity_id).first()
+            if not sop:
+                return {}
+            st = None
+            if sop.current_version_id:
+                st = (
+                    db.query(SOPVersion)
+                    .filter(SOPVersion.id == sop.current_version_id)
+                    .first()
+                )
+            return {
+                "ref_number": sop.sop_number or "",
+                "title": sop.title or "",
+                "sop_number": sop.sop_number or "",
+                "department": sop.department or "",
+                "status": (st.external_status if st else None) or "",
+            }
+        if entity_type == "deviation":
+            row = db.query(Deviation).filter(Deviation.id == entity_id).first()
+            if not row:
+                return {}
+            return {
+                "ref_number": row.deviation_number or "",
+                "title": row.title or "",
+                "department": row.site or row.category or "",
+                "status": row.external_status or "",
+            }
+        if entity_type == "capa":
+            row = db.query(Capa).filter(Capa.id == entity_id).first()
+            if not row:
+                return {}
+            return {
+                "ref_number": row.capa_number or "",
+                "title": row.title or "",
+                "department": row.owner_name or "",
+                "status": row.external_status or "",
+            }
+        if entity_type == "audit_finding":
+            row = db.query(AuditFinding).filter(AuditFinding.id == entity_id).first()
+            if not row:
+                return {}
+            ref = row.finding_number or row.audit_number or str(entity_id)[:8]
+            return {
+                "ref_number": str(ref) if ref else str(entity_id)[:8],
+                "title": (row.finding_text or row.question_text or "Audit finding")[:255],
+                "department": row.authority or row.site or "",
+                "status": row.acceptance_status or "",
+            }
+        if entity_type == "decision":
+            row = db.query(Decision).filter(Decision.id == entity_id).first()
+            if not row:
+                return {}
+            return {
+                "ref_number": (row.decision_number or str(entity_id)[:8]) or "",
+                "title": row.title or "",
+                "department": row.decision_type or "",
+                "status": (row.decision_type or row.decided_by_role) or "",
+            }
+        return {}
+
+    @staticmethod
     def _index_entity(db: Session, entity_type: str, entity_id: uuid.UUID, version_id: uuid.UUID | None = None):
         sections, resolved_version = SemanticPipelineService._normalize_entity(db, entity_type, entity_id, version_id)
         if not sections:
@@ -312,6 +390,44 @@ class SemanticPipelineService:
         example_vec = embedder.encode(["dimension_probe"], normalize_embeddings=True)[0]
         SemanticPipelineService._ensure_collection(len(example_vec))
         client = _get_qdrant()
+        # Remove prior Qdrant points for this entity so orphan vectors cannot drift from knowledge_chunks
+        try:
+            client.delete(
+                collection_name=DEFAULT_COLLECTION,
+                wait=True,
+                points_selector=qmodels.FilterSelector(
+                    filter=qmodels.Filter(
+                        must=[
+                            qmodels.FieldCondition(
+                                key="entity_id",
+                                match=qmodels.MatchValue(value=str(entity_id)),
+                            ),
+                            qmodels.FieldCondition(
+                                key="entity_type",
+                                match=qmodels.MatchValue(value=entity_type),
+                            ),
+                        ]
+                    )
+                ),
+            )
+        except Exception as ex:
+            print(f"[semantic-pipeline] Qdrant delete (entity scope) non-fatal: {ex}")
+
+        display = SemanticPipelineService._entity_rag_fields(db, entity_type, entity_id)
+        doc_type_norm = SemanticPipelineService._doc_type_for_entity(entity_type)
+        ref = (display.get("ref_number") or "").strip() or str(entity_id)
+        title = (display.get("title") or "").strip() or "Untitled"
+        rag_meta = {
+            "doc_type": doc_type_norm,
+            "entity_type": entity_type,
+            "ref_number": ref,
+            "source_id": str(entity_id),
+            "title": title,
+            "department": display.get("department") or "",
+            "status": display.get("status") or "",
+        }
+        if display.get("sop_number"):
+            rag_meta["sop_number"] = display["sop_number"]
 
         points = []
         chunk_order = 0
@@ -333,29 +449,37 @@ class SemanticPipelineService:
                         "section_name": section_name,
                         "chunk_index": chunk_order,
                         "embedding_model": BGE_M3_MODEL,
+                        **{k: v for k, v in rag_meta.items() if v is not None and v != ""},
                     },
                 )
                 db.add(chunk)
                 qid = str(uuid.uuid4())
+                pl = {
+                    "entity_type": entity_type,
+                    "entity_id": str(entity_id),
+                    "version_id": str(resolved_version) if resolved_version else None,
+                    "section_name": section_name,
+                    "chunk_index": chunk_order,
+                    "embedding_model": BGE_M3_MODEL,
+                    "page_content": text,
+                    "chunk_text": text,
+                    "ref_number": ref,
+                    "title": title,
+                    "department": rag_meta.get("department", ""),
+                    "status": rag_meta.get("status", ""),
+                    "metadata": rag_meta,
+                }
                 points.append(
                     qmodels.PointStruct(
                         id=qid,
                         vector=emb,
-                        payload={
-                            "entity_type": entity_type,
-                            "entity_id": str(entity_id),
-                            "version_id": str(resolved_version) if resolved_version else None,
-                            "section_name": section_name,
-                            "chunk_index": chunk_order,
-                            "embedding_model": BGE_M3_MODEL,
-                            "chunk_text": text,
-                        },
+                        payload=pl,
                     )
                 )
                 chunk_order += 1
         db.commit()
         if points:
-            client.upsert(collection_name=DEFAULT_COLLECTION, points=points)
+            client.upsert(collection_name=DEFAULT_COLLECTION, points=points, wait=True)
 
     @staticmethod
     def _generate_suggestions(db: Session, entity_type: str, entity_id: uuid.UUID):

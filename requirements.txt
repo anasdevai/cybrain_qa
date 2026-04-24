@@ -8,5 +8,6 @@ fastapi
 uvicorn
 httpx
 python-dotenv
+pypdf>=4.0.0
 langchain-huggingface
 langchain-qdrant

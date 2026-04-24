@@ -1,6 +1,7 @@
 from html import escape
 import re
 import os
+import math
 import threading
 import asyncio
 from typing import Any
@@ -9,7 +10,12 @@ from fastapi import APIRouter, HTTPException
 from sqlalchemy import or_
 from langchain_core.output_parsers import StrOutputParser
 
-from action.prompts import build_gap_check_prompt, build_improve_prompt, build_rewrite_prompt
+from action.prompts import (
+    IMPROVE_REWRITE_NO_RAG_CONTEXT,
+    build_gap_check_prompt,
+    build_improve_prompt,
+    build_rewrite_prompt,
+)
 from action.runtime import create_action_runtime
 from action.utils import format_chunks, parse_with_retry
 from schemas.sop_actions import ActionRequest, GapCheckResponse, ImproveResponse, RewriteResponse
@@ -26,12 +32,13 @@ _smart_rag_lock = threading.Lock()
 _smart_rag_chain = None
 _action_runtime_lock = threading.Lock()
 _action_runtime = None
-CHAT_QUERY_TIMEOUT_SECONDS = int(os.getenv("CHAT_QUERY_TIMEOUT_SECONDS", "25"))
+CHAT_QUERY_TIMEOUT_SECONDS = int(os.getenv("CHAT_QUERY_TIMEOUT_SECONDS", "60"))
 SOP_REF_PATTERN = re.compile(r"\bSOP-[A-Z0-9-]+\b", re.IGNORECASE)
 DEV_REF_PATTERN = re.compile(r"\bDEV-[A-Z0-9-]+\b", re.IGNORECASE)
 CAPA_REF_PATTERN = re.compile(r"\bCAPA-[A-Z0-9-]+\b", re.IGNORECASE)
 AUDIT_REF_PATTERN = re.compile(r"\bAUDIT-[A-Z0-9-]+\b", re.IGNORECASE)
 DECISION_REF_PATTERN = re.compile(r"\bDEC-[A-Z0-9-]+\b", re.IGNORECASE)
+# Reload server after changing CHATBOT_USE_LOCAL_DB in .env (import-time flag).
 CHATBOT_USE_LOCAL_DB = os.getenv("CHATBOT_USE_LOCAL_DB", "true").strip().lower() == "true"
 
 
@@ -54,6 +61,7 @@ def _get_smart_rag_chain() -> Any:
         from langchain_qdrant import QdrantVectorStore
         from embeddings.embedder import get_embedder
         from retrieval.federated_retriever import FederatedRetriever
+        from retrieval.hybrid_retriever import rag_unified_enabled, unified_semantic_collection
         from retrieval.reranker import CrossEncoderReranker
         from chain.rag_chain import SmartRAGChain
 
@@ -66,13 +74,23 @@ def _get_smart_rag_chain() -> Any:
         embedder = get_embedder()
         reranker = CrossEncoderReranker(top_n=5)
 
-        collection_map = {
-            "sops": os.getenv("COLLECTION_SOPS", "docs_sops"),
-            "deviations": os.getenv("COLLECTION_DEVIATIONS", "docs_deviations"),
-            "capas": os.getenv("COLLECTION_CAPAS", "docs_capas"),
-            "audits": os.getenv("COLLECTION_AUDITS", "docs_audits"),
-            "decisions": os.getenv("COLLECTION_DECISIONS", "docs_decisions"),
-        }
+        if rag_unified_enabled():
+            ucol = unified_semantic_collection()
+            collection_map = {
+                "sops": ucol,
+                "deviations": ucol,
+                "capas": ucol,
+                "audits": ucol,
+                "decisions": ucol,
+            }
+        else:
+            collection_map = {
+                "sops": os.getenv("COLLECTION_SOPS", "docs_sops"),
+                "deviations": os.getenv("COLLECTION_DEVIATIONS", "docs_deviations"),
+                "capas": os.getenv("COLLECTION_CAPAS", "docs_capas"),
+                "audits": os.getenv("COLLECTION_AUDITS", "docs_audits"),
+                "decisions": os.getenv("COLLECTION_DECISIONS", "docs_decisions"),
+            }
         vectorstores = {
             section: QdrantVectorStore(client=client, collection_name=collection_name, embedding=embedder)
             for section, collection_name in collection_map.items()
@@ -607,12 +625,25 @@ def _render_improve(structured_data: dict) -> str:
     )
 
 
-def _call_action_llm(runtime: Any, prompt: str) -> str:
+def _action_output_token_budget(input_chars: int) -> int:
+    """
+    Long selected text needs a larger output budget; JSON + improved copy can exceed 1–2k tokens.
+    """
+    cap = int(os.getenv("GEMINI_ACTION_MAX_OUTPUT_TOKENS_CAP", "8192"))
+    if input_chars <= 0:
+        return int(os.getenv("GEMINI_ACTION_MAX_OUTPUT_TOKENS") or "4096")
+    return min(cap, max(2048, int(input_chars * 0.45) + 1200))
+
+
+def _call_action_llm(runtime: Any, prompt: str, *, input_char_budget: int = 0) -> str:
     parser = StrOutputParser()
+    n = _action_output_token_budget(input_char_budget) if input_char_budget else int(
+        os.getenv("GEMINI_ACTION_MAX_OUTPUT_TOKENS") or "4096"
+    )
     try:
-        return (runtime.llm | parser).invoke(prompt)
+        return (runtime.llm.bind(max_output_tokens=n) | parser).invoke(prompt)
     except Exception:
-        return (runtime.fallback_llm | parser).invoke(prompt)
+        return (runtime.fallback_llm.bind(max_output_tokens=n) | parser).invoke(prompt)
 
 
 def _render_dynamic_text(text: str) -> str:
@@ -659,18 +690,26 @@ def _build_gap_check_retrieval_query(request: ActionRequest) -> str:
 def _run_dynamic_ai_action(payload: AIActionRequest, action: str) -> AIActionResponse:
     runtime = _get_action_runtime()
     request = _build_action_request(payload)
-    retrieval_query = _build_gap_check_retrieval_query(request) if action == "gap_check" else request.section_text
-    raw_docs = runtime.retriever.invoke(retrieval_query)
-    reranked = runtime.reranker.rerank_top_n(retrieval_query, raw_docs, 3)
-    context = format_chunks(reranked)
+    ch_budget = len(request.section_text or "")
+
+    if action == "gap_check":
+        retrieval_query = _build_gap_check_retrieval_query(request)
+        raw_docs = runtime.retriever.invoke(retrieval_query)
+        reranked = runtime.reranker.rerank_top_n(retrieval_query, raw_docs, 3)
+        context = format_chunks(reranked)
+    else:
+        # improve / rewrite: no RAG — system prompt + rules + document fields + section text only
+        context = IMPROVE_REWRITE_NO_RAG_CONTEXT
 
     if action == "improve":
         prompt = build_improve_prompt(request, context)
         parsed = parse_with_retry(
-            raw=_call_action_llm(runtime, prompt),
+            raw=_call_action_llm(runtime, prompt, input_char_budget=ch_budget),
             schema=ImproveResponse,
             prompt=prompt,
-            call_llm=lambda retry_prompt: _call_action_llm(runtime, retry_prompt),
+            call_llm=lambda rp: _call_action_llm(
+                runtime, rp, input_char_budget=ch_budget
+            ),
             audit_log=[],
         )
         return AIActionResponse(
@@ -687,10 +726,12 @@ def _run_dynamic_ai_action(payload: AIActionRequest, action: str) -> AIActionRes
     if action == "rewrite":
         prompt = build_rewrite_prompt(request, context)
         parsed = parse_with_retry(
-            raw=_call_action_llm(runtime, prompt),
+            raw=_call_action_llm(runtime, prompt, input_char_budget=ch_budget),
             schema=RewriteResponse,
             prompt=prompt,
-            call_llm=lambda retry_prompt: _call_action_llm(runtime, retry_prompt),
+            call_llm=lambda rp: _call_action_llm(
+                runtime, rp, input_char_budget=ch_budget
+            ),
             audit_log=[],
         )
         return AIActionResponse(
@@ -706,10 +747,12 @@ def _run_dynamic_ai_action(payload: AIActionRequest, action: str) -> AIActionRes
     if action == "gap_check":
         prompt = build_gap_check_prompt(request, context)
         parsed = parse_with_retry(
-            raw=_call_action_llm(runtime, prompt),
+            raw=_call_action_llm(runtime, prompt, input_char_budget=ch_budget),
             schema=GapCheckResponse,
             prompt=prompt,
-            call_llm=lambda retry_prompt: _call_action_llm(runtime, retry_prompt),
+            call_llm=lambda rp: _call_action_llm(
+                runtime, rp, input_char_budget=ch_budget
+            ),
             audit_log=[],
         )
         return AIActionResponse(
@@ -728,13 +771,14 @@ def _run_dynamic_ai_action(payload: AIActionRequest, action: str) -> AIActionRes
 def _fallback_gap_check(payload: AIActionRequest) -> AIActionResponse:
     runtime = _get_action_runtime()
     request = _build_action_request(payload)
+    ch_budget = len(request.section_text or "")
     prompt = build_gap_check_prompt(request, "Kein relevanter Kontext verfügbar. / No relevant context found.")
-    raw = _call_action_llm(runtime, prompt)
+    raw = _call_action_llm(runtime, prompt, input_char_budget=ch_budget)
     parsed = parse_with_retry(
         raw=raw,
         schema=GapCheckResponse,
         prompt=prompt,
-        call_llm=lambda retry_prompt: _call_action_llm(runtime, retry_prompt),
+        call_llm=lambda rp: _call_action_llm(runtime, rp, input_char_budget=ch_budget),
         audit_log=[],
     )
     return AIActionResponse(
@@ -749,13 +793,14 @@ def _fallback_gap_check(payload: AIActionRequest) -> AIActionResponse:
 def _fallback_rewrite(payload: AIActionRequest) -> AIActionResponse:
     runtime = _get_action_runtime()
     request = _build_action_request(payload)
-    prompt = build_rewrite_prompt(request, "Kein relevanter Kontext verfügbar. / No relevant context found.")
-    raw = _call_action_llm(runtime, prompt)
+    ch_budget = len(request.section_text or "")
+    prompt = build_rewrite_prompt(request, IMPROVE_REWRITE_NO_RAG_CONTEXT)
+    raw = _call_action_llm(runtime, prompt, input_char_budget=ch_budget)
     parsed = parse_with_retry(
         raw=raw,
         schema=RewriteResponse,
         prompt=prompt,
-        call_llm=lambda retry_prompt: _call_action_llm(runtime, retry_prompt),
+        call_llm=lambda rp: _call_action_llm(runtime, rp, input_char_budget=ch_budget),
         audit_log=[],
     )
     return AIActionResponse(
@@ -770,13 +815,14 @@ def _fallback_rewrite(payload: AIActionRequest) -> AIActionResponse:
 def _fallback_improve(payload: AIActionRequest) -> AIActionResponse:
     runtime = _get_action_runtime()
     request = _build_action_request(payload)
-    prompt = build_improve_prompt(request, "Kein relevanter Kontext verfügbar. / No relevant context found.")
-    raw = _call_action_llm(runtime, prompt)
+    ch_budget = len(request.section_text or "")
+    prompt = build_improve_prompt(request, IMPROVE_REWRITE_NO_RAG_CONTEXT)
+    raw = _call_action_llm(runtime, prompt, input_char_budget=ch_budget)
     parsed = parse_with_retry(
         raw=raw,
         schema=ImproveResponse,
         prompt=prompt,
-        call_llm=lambda retry_prompt: _call_action_llm(runtime, retry_prompt),
+        call_llm=lambda rp: _call_action_llm(runtime, rp, input_char_budget=ch_budget),
         audit_log=[],
     )
     return AIActionResponse(
@@ -836,7 +882,11 @@ async def query_ai(payload: dict):
     chat_history = payload.get("chat_history") or []
 
     if CHATBOT_USE_LOCAL_DB:
-        return _build_local_db_chat_response(question, chat_history, category)
+        # Run in a worker thread so SQLAlchemy work does not block the event loop
+        # (avoids piling up slow requests, nginx timeouts, and a stuck-feeling UI).
+        return await asyncio.to_thread(
+            _build_local_db_chat_response, question, chat_history, category
+        )
 
     db_fallback_response = _build_sop_db_fallback(question, chat_history)
 
@@ -891,7 +941,22 @@ async def query_ai(payload: dict):
             "routed_to": "error-fallback",
         }
 
-    citations = result.get("citations", [])
+    def _json_safe_citations(cits: list) -> list:
+        out = []
+        for c in cits or []:
+            if not isinstance(c, dict):
+                continue
+            d = dict(c)
+            s = d.get("score", 0.0)
+            try:
+                f = float(s)
+                d["score"] = f if math.isfinite(f) else 0.0
+            except (TypeError, ValueError):
+                d["score"] = 0.0
+            out.append(d)
+        return out
+
+    citations = _json_safe_citations(result.get("citations", []))
     sources = []
     for idx, c in enumerate(citations):
         ref = c.get("ref") or c.get("title") or f"source-{idx+1}"

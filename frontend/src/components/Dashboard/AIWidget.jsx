@@ -38,10 +38,10 @@ export default function AIWidget() {
   const suggestions =
     SUGGESTIONS_BY_ROUTE[location.pathname] ?? SUGGESTIONS_BY_ROUTE.default
 
-  // Auto-scroll to bottom whenever messages change
+  // Auto-scroll to bottom when messages change or when loading indicator appears
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages])
+  }, [messages, sending])
 
   const sendMessage = useCallback(async (text) => {
     const trimmed = text.trim()
@@ -168,8 +168,15 @@ export default function AIWidget() {
         ))}
 
         {sending && (
-          <div className="ai-typing-indicator">
-            <span /><span /><span />
+          <div
+            className="ai-typing-indicator"
+            role="status"
+            aria-live="polite"
+            aria-label="Antwort wird generiert"
+          >
+            <span />
+            <span />
+            <span />
           </div>
         )}
         <div ref={chatEndRef} />

@@ -24,6 +24,7 @@ from backend.schemas.sop_actions import (
 from database.models import AISuggestion, User
 
 from action.prompts import (
+    IMPROVE_REWRITE_NO_RAG_CONTEXT,
     build_convert_prompt,
     build_convert_retry_prompt,
     build_gap_check_prompt,
@@ -173,8 +174,60 @@ class SOPActionService:
             status=suggestion.status,
         )
 
+    async def _run_prompt_only_action(
+        self,
+        *,
+        db: AsyncSession,
+        request: ActionRequest,
+        action_type: str,
+        schema: type[Any],
+        prompt_builder,
+        current_user: User | None,
+    ) -> ActionResponseEnvelope:
+        """Improve / Rewrite: LLM only (no RAG / no retriever)."""
+        audit_log: list[dict[str, Any]] = [
+            {"event": "action_started", "timestamp": utc_now_iso(), "action": action_type},
+            {"event": "rag_skipped", "timestamp": utc_now_iso(), "reason": "improve_or_rewrite_no_kb"},
+        ]
+        context = IMPROVE_REWRITE_NO_RAG_CONTEXT
+        prompt = prompt_builder(request, context)
+        raw = self._call_llm(prompt)
+        audit_log.append({"event": "llm_completed", "timestamp": utc_now_iso(), "action": action_type})
+        parsed = parse_with_retry(
+            raw=raw,
+            schema=schema,
+            prompt=prompt,
+            call_llm=self._call_llm,
+            audit_log=audit_log,
+        )
+        metadata_snapshot = {
+            "rag_enabled": False,
+            "query_vector_size": None,
+            "collection_name": None,
+            "fusion_weights": None,
+            "reranker": None,
+            "llm_model": getattr(self.runtime.llm, "model", None),
+        }
+        suggestion = await self._save_suggestion(
+            db=db,
+            request=request,
+            action_type=action_type,
+            result=parsed.model_dump(),
+            related_documents=[],
+            metadata_snapshot=metadata_snapshot,
+            audit_log_snapshot=audit_log,
+            current_user=current_user,
+        )
+        return ActionResponseEnvelope(
+            suggestion_id=suggestion.id,
+            result=parsed.model_dump(),
+            related_documents=[],
+            action_type=action_type,
+            status=suggestion.status,
+        )
+
     async def improve(self, db: AsyncSession, request: ActionRequest, current_user: User | None) -> ActionResponseEnvelope:
-        return await self._run_rag_action(
+        return await self._run_prompt_only_action(
             db=db,
             request=request,
             action_type="improve",
@@ -184,7 +237,7 @@ class SOPActionService:
         )
 
     async def rewrite(self, db: AsyncSession, request: ActionRequest, current_user: User | None) -> ActionResponseEnvelope:
-        return await self._run_rag_action(
+        return await self._run_prompt_only_action(
             db=db,
             request=request,
             action_type="rewrite",

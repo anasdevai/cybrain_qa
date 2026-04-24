@@ -1,3 +1,4 @@
+import math
 from sentence_transformers import CrossEncoder
 from langchain_core.documents import Document
 from typing import List
@@ -29,14 +30,17 @@ class CrossEncoderReranker:
         # low negative scores and degrade an otherwise good hybrid ranking. In that
         # case, keep the original retrieval order.
         if ranked and float(ranked[0][1]) < 0:
+            # Keep hybrid order; use a finite score so API JSON (citations) never sees -inf.
             fallback = docs[:top_n]
             for doc in fallback:
-                doc.metadata["rerank_score"] = float("-inf")
+                doc.metadata["rerank_score"] = 0.0
+                doc.metadata["rerank_degraded"] = True
             return fallback
 
         top = ranked[:top_n]
         for doc, score in top:
-            doc.metadata["rerank_score"] = float(score)
+            s = float(score)
+            doc.metadata["rerank_score"] = s if math.isfinite(s) else 0.0
 
         # Filter out very low scores to avoid noise
         filtered = [(doc, score) for doc, score in top if score > -5.0]

@@ -41,9 +41,10 @@ const AIAssistantBubbleMenu = ({ editor, sopMetadata, isEditable = true }) => {
         }
 
         selectionRef.current = { from, to, selectedText }
+        // position: fixed uses viewport coordinates; coordsAtPos is already viewport-relative
         setMenuPosition({
-          top: Math.min(start.top, end.top) - 10 + window.scrollY,
-          left: ((start.left + end.left) / 2) + window.scrollX,
+          top: Math.min(start.top, end.top) - 10,
+          left: (start.left + end.left) / 2,
         })
       } catch {
         selectionRef.current = null

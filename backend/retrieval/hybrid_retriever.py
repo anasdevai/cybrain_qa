@@ -1,3 +1,6 @@
+import os
+import time
+import numpy as np
 from langchain_core.retrievers import BaseRetriever
 from langchain_core.documents import Document
 from langchain_core.callbacks import CallbackManagerForRetrieverRun
@@ -6,12 +9,27 @@ from qdrant_client import QdrantClient
 from qdrant_client.models import Filter, FieldCondition, MatchValue
 from rank_bm25 import BM25Okapi
 from typing import Optional, List
-import numpy as np
-import time
 
 # Module-level cache to store BM25 index and documents per collection, avoiding RAM leaks.
 # Schema: { collection_name: {"docs": [...], "bm25": BM25Okapi, "time": float} }
 _GLOBAL_BM25_CACHE = {}
+
+# Federated "section" (router) -> payload entity_type in qa_semantic_chunks (semantic index).
+SECTION_TO_ENTITY_TYPE = {
+    "sops": "sop",
+    "deviations": "deviation",
+    "capas": "capa",
+    "audits": "audit_finding",
+    "decisions": "decision",
+}
+
+
+def rag_unified_enabled() -> bool:
+    return os.getenv("RAG_UNIFIED_QDRANT", "true").strip().lower() == "true"
+
+
+def unified_semantic_collection() -> str:
+    return os.getenv("SEMANTIC_QDRANT_COLLECTION", "qa_semantic_chunks")
 
 class HybridRetriever(BaseRetriever):
     vectorstore: QdrantVectorStore
@@ -28,6 +46,16 @@ class HybridRetriever(BaseRetriever):
     class Config:
         arbitrary_types_allowed = True
 
+    def _uses_unified_semantic_collection(self) -> bool:
+        return rag_unified_enabled() and (self.collection_name or "") == unified_semantic_collection()
+
+    def _target_entity_type(self) -> Optional[str]:
+        if not self.category_filter:
+            return None
+        return SECTION_TO_ENTITY_TYPE.get(
+            str(self.category_filter).strip().lower()
+        )
+
     def _normalized_doc_type_filter(self) -> Optional[str]:
         if not self.category_filter:
             return None
@@ -43,30 +71,62 @@ class HybridRetriever(BaseRetriever):
 
     def _build_filter(self) -> Optional[Filter]:
         must_list = []
-        
-        # 1. Collection/Category filter
-        if self.category_filter:
+
+        # 1) Entity scope: per-doc collections use doc_type; unified semantic index uses entity_type
+        if self.category_filter and self._uses_unified_semantic_collection():
+            et = self._target_entity_type()
+            if et:
+                must_list.append(
+                    FieldCondition(key="entity_type", match=MatchValue(value=et))
+                )
+        elif self.category_filter:
             normalized = self._normalized_doc_type_filter()
             must_list.append(
                 Filter(
                     should=[
                         FieldCondition(key="doc_type", match=MatchValue(value=normalized)),
-                        FieldCondition(key="metadata.doc_type", match=MatchValue(value=normalized))
+                        FieldCondition(key="metadata.doc_type", match=MatchValue(value=normalized)),
                     ]
                 )
             )
-            
-        # 2. Arbitrary metadata filters (e.g. department)
+
+        # 2) Arbitrary metadata / identifier filters
         if self.metadata_filters:
             for key, val in self.metadata_filters.items():
-                if val:
+                if not val:
+                    continue
+                if str(key) == "ref_number":
                     must_list.append(
-                        FieldCondition(key=key, match=MatchValue(value=val))
+                        Filter(
+                            should=[
+                                FieldCondition(key="ref_number", match=MatchValue(value=val)),
+                                FieldCondition(
+                                    key="metadata.ref_number",
+                                    match=MatchValue(value=val),
+                                ),
+                            ]
+                        )
                     )
-        
+                elif str(key) == "department":
+                    must_list.append(
+                        Filter(
+                            should=[
+                                FieldCondition(key="department", match=MatchValue(value=val)),
+                                FieldCondition(
+                                    key="metadata.department",
+                                    match=MatchValue(value=val),
+                                ),
+                            ]
+                        )
+                    )
+                else:
+                    must_list.append(
+                        FieldCondition(key=str(key), match=MatchValue(value=val))
+                    )
+
         if not must_list:
             return None
-            
+
         return Filter(must=must_list)
 
     def _get_bm25_corpus(self) -> tuple[List[Document], BM25Okapi]:
@@ -84,11 +144,27 @@ class HybridRetriever(BaseRetriever):
         )
         docs, tokenized = [], []
         for p in points:
-            text = p.payload.get("page_content", "")
-            docs.append(Document(
-                page_content=text,
-                metadata={**p.payload.get("metadata", {}), "qdrant_id": p.id}
-            ))
+            pl = p.payload or {}
+            text = (pl.get("page_content") or pl.get("chunk_text") or "").strip()
+            nested = pl.get("metadata") or {}
+            if not isinstance(nested, dict):
+                nested = {}
+            meta = {
+                **nested,
+                "qdrant_id": p.id,
+            }
+            for k in (
+                "entity_type",
+                "entity_id",
+                "ref_number",
+                "title",
+                "department",
+                "status",
+                "version_id",
+            ):
+                if k in pl and pl[k] is not None and k not in meta:
+                    meta[k] = pl[k]
+            docs.append(Document(page_content=text, metadata=meta))
             tokenized.append(text.lower().split())
         
         if not docs:
@@ -120,6 +196,15 @@ class HybridRetriever(BaseRetriever):
             )
         except Exception:
             dense_results = []
+        if dense_results:
+            patched = []
+            for d, s in dense_results:
+                if not (d.page_content or "").strip():
+                    alt = (d.metadata or {}).get("chunk_text")
+                    if alt:
+                        d = Document(page_content=str(alt), metadata=dict(d.metadata or {}))
+                patched.append((d, s))
+            dense_results = patched
 
         corpus_docs, bm25 = self._get_bm25_corpus()
         if not corpus_docs:
@@ -127,12 +212,24 @@ class HybridRetriever(BaseRetriever):
 
         # Apply metadata/category filter to BM25 corpus too, so dense and sparse
         # paths respect the same filtering rules.
-        normalized = self._normalized_doc_type_filter()
-        if normalized:
+        if self._uses_unified_semantic_collection() and self._target_entity_type():
+            want = self._target_entity_type()
             filtered_corpus = [
-                d for d in corpus_docs
-                if str((d.metadata or {}).get("doc_type", "")).lower() == normalized
+                d
+                for d in corpus_docs
+                if str((d.metadata or {}).get("entity_type", "")) == want
             ]
+        else:
+            normalized = self._normalized_doc_type_filter()
+            if not normalized:
+                filtered_corpus = list(corpus_docs)
+            else:
+                filtered_corpus = [
+                    d
+                    for d in corpus_docs
+                    if str((d.metadata or {}).get("doc_type", "")).lower() == normalized
+                ]
+        if self.category_filter:
             corpus_docs = filtered_corpus
             if not corpus_docs:
                 return []

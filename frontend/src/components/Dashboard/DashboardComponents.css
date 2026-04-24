@@ -911,6 +911,11 @@
   align-items: center;
   gap: 4px;
   padding: 10px 12px;
+  align-self: flex-start;
+  margin-top: 4px;
+  background: #eaf4ee;
+  border: 1px solid #d7e6dd;
+  border-radius: 2px;
 }
 
 .ai-typing-indicator span {

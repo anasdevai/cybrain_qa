@@ -6,12 +6,16 @@
   display: flex;
   flex-direction: column;
   padding: 16px 12px;
-  height: 100vh;
+  /* Fill MainLayout grid row; 100vh here caused double page scroll on some viewports */
+  height: 100%;
+  min-height: 0;
+  max-height: 100%;
   /* Let the grid column control width — do NOT set explicit width/min-width here */
   width: 100%;
   min-width: 0;
   overflow-y: auto;
   overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
 }
 
 /* Mobile close button — hidden by default on desktop */

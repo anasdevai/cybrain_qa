@@ -140,7 +140,10 @@ export default function EntitiesPage({ type }) {
     })
   }, [filteredItems, isDeviations])
 
-  const topItems = useMemo(() => (showAllItems ? filteredItems : filteredItems.slice(0, 6)), [filteredItems, showAllItems])
+  const topItems = useMemo(
+    () => (showAllItems || filteredItems.length <= 6 ? filteredItems : filteredItems.slice(0, 6)),
+    [filteredItems, showAllItems],
+  )
 
   const uniqueStatuses = useMemo(() => {
     const base = new Set()
@@ -265,7 +268,15 @@ export default function EntitiesPage({ type }) {
         <section className="entities-card entities-list-card">
           <div className="entities-card-head">
             <h2>Aktuelle & relevante {isDeviations ? 'Abweichungen' : config.title}</h2>
-            <button type="button">Alle {filteredItems.length} anzeigen</button>
+            {filteredItems.length > 6 ? (
+              <button
+                type="button"
+                className="entities-card-head-link"
+                onClick={() => setShowAllItems((v) => !v)}
+              >
+                {showAllItems ? 'Kompakt anzeigen' : `Alle ${filteredItems.length} anzeigen`}
+              </button>
+            ) : null}
           </div>
           {loading ? (
             <div className="entities-loading-row"><Loader size={18} className="spin" /> Lade Daten...</div>

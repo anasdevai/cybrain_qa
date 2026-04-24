@@ -16,7 +16,11 @@ from qdrant_client import QdrantClient
 from langchain_qdrant import QdrantVectorStore
 
 from embeddings.embedder import get_embedder
-from retrieval.hybrid_retriever import HybridRetriever
+from retrieval.hybrid_retriever import (
+    HybridRetriever,
+    rag_unified_enabled,
+    unified_semantic_collection,
+)
 from retrieval.reranker import CrossEncoderReranker
 from retrieval.federated_retriever import FederatedRetriever
 from chain.rag_chain import SmartRAGChain
@@ -46,13 +50,17 @@ async def startup():
     embedder = get_embedder()
     reranker = CrossEncoderReranker(top_n=5)
 
-    collection_map = {
-        "sops":       os.getenv("COLLECTION_SOPS",       "docs_sops"),
-        "deviations": os.getenv("COLLECTION_DEVIATIONS", "docs_deviations"),
-        "capas":      os.getenv("COLLECTION_CAPAS",      "docs_capas"),
-        "audits":     os.getenv("COLLECTION_AUDITS",     "docs_audits"),
-        "decisions":  os.getenv("COLLECTION_DECISIONS",  "docs_decisions"),
-    }
+    if rag_unified_enabled():
+        ucol = unified_semantic_collection()
+        collection_map = {k: ucol for k in ("sops", "deviations", "capas", "audits", "decisions")}
+    else:
+        collection_map = {
+            "sops":       os.getenv("COLLECTION_SOPS",       "docs_sops"),
+            "deviations": os.getenv("COLLECTION_DEVIATIONS", "docs_deviations"),
+            "capas":      os.getenv("COLLECTION_CAPAS",      "docs_capas"),
+            "audits":     os.getenv("COLLECTION_AUDITS",     "docs_audits"),
+            "decisions":  os.getenv("COLLECTION_DECISIONS",  "docs_decisions"),
+        }
 
     vectorstores = {
         section: QdrantVectorStore(client=client, collection_name=col, embedding=embedder)

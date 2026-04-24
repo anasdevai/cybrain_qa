@@ -93,7 +93,8 @@ export default function KnowledgePage() {
   const navigate = useNavigate()
   const [query, setQuery] = useState('')
   const [loading, setLoading] = useState(false)
-  const [initialLoading, setInitialLoading] = useState(true)
+  /** Stats load must not block the search box (a slow/hung /api/stats would otherwise grey out input forever). */
+  const [statsLoading, setStatsLoading] = useState(true)
 
   const [stats, setStats] = useState({ sops: 0, deviations: 0, capas: 0, audits: 0, decisions: 0 })
 
@@ -105,14 +106,14 @@ export default function KnowledgePage() {
   // Fetch real count stats on mount
   useEffect(() => {
     async function loadStats() {
-      setInitialLoading(true)
+      setStatsLoading(true)
       try {
         const counts = await getKnowledgeStats()
         setStats(counts)
       } catch (err) {
         console.error('Failed to load knowledge metrics', err)
       } finally {
-        setInitialLoading(false)
+        setStatsLoading(false)
       }
     }
     loadStats()
@@ -140,7 +141,7 @@ export default function KnowledgePage() {
 
   const handleSubmit = useCallback(async (text) => {
     const trimmed = (text || query).trim()
-    if (!trimmed || loading || initialLoading) return
+    if (!trimmed || loading) return
     setQuery(text)
     setLoading(true)
     setShowResults(false)
@@ -193,7 +194,7 @@ export default function KnowledgePage() {
       setLoading(false)
       setShowResults(true)
     }
-  }, [loading, initialLoading, query])
+  }, [loading, query])
 
   const handleFormSubmit = (e) => {
     e.preventDefault()
@@ -201,7 +202,7 @@ export default function KnowledgePage() {
   }
 
   const handleChipClick = (chip) => {
-    if (loading || initialLoading) return
+    if (loading) return
     setQuery(chip)
     handleSubmit(chip)
   }
@@ -247,13 +248,13 @@ export default function KnowledgePage() {
             placeholder="z.B. Zeige mir alle offenen Abweichungen..."
             value={query}
             onChange={e => setQuery(e.target.value)}
-            disabled={loading || initialLoading}
+            disabled={loading}
             aria-label="Wissenssuche Anfrage"
           />
           <button
             type="submit"
             className={`ws-kontext-btn${loading ? ' loading' : ''}`}
-            disabled={loading || initialLoading || !query.trim()}
+            disabled={loading || !query.trim()}
             aria-label="Kontext analysieren"
           >
             {loading ? (
@@ -269,7 +270,7 @@ export default function KnowledgePage() {
 
         <div className="ws-sources-section">
           <span className="ws-sources-label">Echte Backend Quellen:</span>
-          {initialLoading ? (
+          {statsLoading ? (
             <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>Synchronisiere Daten...</span>
           ) : (
             <div className="ws-source-tags">
@@ -285,14 +286,14 @@ export default function KnowledgePage() {
         <div className="ws-chips-section">
           <div className="ws-chips-row">
             {CHIPS_ROW1.map(chip => (
-              <button key={chip} type="button" className="ws-chip" onClick={() => handleChipClick(chip)} disabled={loading || initialLoading}>
+              <button key={chip} type="button" className="ws-chip" onClick={() => handleChipClick(chip)} disabled={loading}>
                 {chip}
               </button>
             ))}
           </div>
           <div className="ws-chips-row">
             {CHIPS_ROW2.map(chip => (
-              <button key={chip} type="button" className="ws-chip" onClick={() => handleChipClick(chip)} disabled={loading || initialLoading}>
+              <button key={chip} type="button" className="ws-chip" onClick={() => handleChipClick(chip)} disabled={loading}>
                 {chip}
               </button>
             ))}

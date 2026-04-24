@@ -5,6 +5,7 @@
   display: flex;
   flex-direction: column;
   gap: 0;
+  flex: 1 1 auto;
   min-height: 0;
   min-width: 0;
 }
@@ -125,8 +126,16 @@
   position: relative;
   background: var(--bg-main);
   border-radius: var(--radius-md);
-  min-height: 600px;
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
   animation: fadeIn 0.2s ease-out;
+}
+
+.editor-tab-wrapper > .editor-page-container {
+  flex: 1 1 auto;
+  min-height: 0;
 }
 
 /* Reduce wrapper padding since TopNavbar is hidden */

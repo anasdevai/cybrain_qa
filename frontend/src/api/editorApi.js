@@ -154,7 +154,20 @@ export async function searchKnowledge(query) {
 }
 
 export async function getKnowledgeStats() {
-  const res = await fetch(`${API_BASE}/api/stats`)
+  const controller = new AbortController()
+  const timeoutMs = 15000
+  const timer = setTimeout(() => controller.abort(), timeoutMs)
+  let res
+  try {
+    res = await fetch(`${API_BASE}/api/stats`, { signal: controller.signal })
+  } catch (err) {
+    if (err?.name === 'AbortError') {
+      throw new Error('Knowledge stats request timed out. Check the API and network.')
+    }
+    throw err
+  } finally {
+    clearTimeout(timer)
+  }
   if (!res.ok) await throwApiError(res, 'Failed to fetch knowledge stats')
   return res.json()
 }
@@ -219,57 +232,17 @@ export async function getRelatedContext(sopId) {
 }
 
 export async function performAIAction(payload) {
+  // Single timeout for the full round-trip. The backend has no /sop/improve-style routes;
+  // calling /api/ai/action directly avoids a wasted request and a bug where the abort
+  // timer was cleared after the first fetch, leaving the follow-up with no time limit.
   const controller = new AbortController()
-  const timeoutMs = 20000
+  const timeoutMs = 120000
   const timer = setTimeout(() => controller.abort(), timeoutMs)
 
   const normalizedAction = String(payload?.action || '').trim().toLowerCase().replace(/-/g, '_')
-  const sopActionRoute = {
-    improve: '/sop/improve',
-    rewrite: '/sop/rewrite',
-    gap_check: '/sop/gaps',
-  }[normalizedAction]
 
-  const routePayload = {
-    document_id: payload?.document_id || null,
-    section_id: payload?.section_id || null,
-    sop_title: payload?.sop_title || null,
-    section_title: payload?.section_name || payload?.section_title || 'Selected text',
-    section_type: payload?.section_type || 'Paragraph',
-    section_text: payload?.text || '',
-  }
-
-  if (sopActionRoute) {
-    let sopRes
-    try {
-      sopRes = await fetch(`${API_BASE}${sopActionRoute}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(routePayload),
-        signal: controller.signal,
-      })
-    } catch (err) {
-      if (err?.name === 'AbortError') {
-        throw new Error('AI action timed out after 20 seconds. Please try again.')
-      }
-      throw err
-    } finally {
-      clearTimeout(timer)
-    }
-
-    if (sopRes.ok) {
-      const sopData = await sopRes.json()
-      return normalizeSOPActionResponse(normalizedAction, payload, sopData)
-    }
-
-    if (![404, 405].includes(sopRes.status)) {
-      await throwApiError(sopRes, 'AI action failed')
-    }
-  }
-
-  let fallbackRes
   try {
-    fallbackRes = await fetch(`${API_BASE}/api/ai/action`, {
+    const res = await fetch(`${API_BASE}/api/ai/action`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -281,123 +254,16 @@ export async function performAIAction(payload) {
       }),
       signal: controller.signal,
     })
+    if (!res.ok) await throwApiError(res, 'AI action failed')
+    return res.json()
   } catch (err) {
     if (err?.name === 'AbortError') {
-      throw new Error('AI action timed out after 20 seconds. Please try again.')
+      throw new Error('AI action timed out. The model or network may be slow; try a shorter selection.')
     }
     throw err
   } finally {
     clearTimeout(timer)
   }
-  if (!fallbackRes.ok) await throwApiError(fallbackRes, 'AI action failed')
-  return fallbackRes.json()
-}
-
-function normalizeSOPActionResponse(action, payload, response) {
-  const result = response?.result || {}
-
-  if (action === 'improve') {
-    const improvedText = result.improved_text || payload?.text || ''
-    const changesMade = Array.isArray(result.changes_made) ? result.changes_made : []
-    return {
-      action: 'improve',
-      original_text: payload?.text || '',
-      suggested_text: renderRichText(improvedText),
-      explanation: result.compliance_note || changesMade.join(' '),
-      structured_data: {
-        improved_text: improvedText,
-        changes_made: changesMade,
-        compliance_note: result.compliance_note || '',
-        improved_version: improvedText,
-        reason_for_improvement: result.compliance_note || changesMade.join(' '),
-      },
-      suggestion_id: response?.suggestion_id,
-      status: response?.status,
-    }
-  }
-
-  if (action === 'rewrite') {
-    const rewrittenText = result.rewritten_text || payload?.text || ''
-    return {
-      action: 'rewrite',
-      original_text: payload?.text || '',
-      suggested_text: renderRichText(rewrittenText),
-      explanation: result.rationale || result.structural_changes || '',
-      structured_data: {
-        rewritten_text: rewrittenText,
-        structural_changes: result.structural_changes || '',
-        rationale: result.rationale || '',
-        purpose: '',
-        scope: '',
-        responsibilities: '',
-        procedure: splitLinesAsSteps(rewrittenText),
-        documentation: '',
-      },
-      suggestion_id: response?.suggestion_id,
-      status: response?.status,
-    }
-  }
-
-  const gaps = Array.isArray(result.gaps) ? result.gaps : []
-  const firstGap = gaps[0] || {}
-  return {
-    action: 'gap_check',
-    original_text: payload?.text || '',
-    suggested_text: renderGapCheckHtml(gaps),
-    explanation: `Checked ${result.section_assessed || payload?.section_name || 'selected text'} for QA and compliance gaps.`,
-    structured_data: {
-      issue: firstGap.issue || 'No specific issue returned.',
-      explanation: firstGap.explanation || 'No explanation returned.',
-      recommendation: firstGap.recommendation || 'No recommendation returned.',
-      gaps,
-      section_assessed: result.section_assessed || payload?.section_name || 'Selected text',
-    },
-    suggestion_id: response?.suggestion_id,
-    status: response?.status,
-  }
-}
-
-function renderGapCheckHtml(gaps) {
-  if (!Array.isArray(gaps) || gaps.length === 0) {
-    return '<p>No structured gaps were returned.</p>'
-  }
-
-  return gaps
-    .map((gap) => (
-      `<div><h3>Issue</h3><p>${escapeHtml(gap.issue || '')}</p><h3>Explanation</h3><p>${escapeHtml(gap.explanation || '')}</p><h3>Recommendation</h3><p>${escapeHtml(gap.recommendation || '')}</p></div>`
-    ))
-    .join('')
-}
-
-function splitLinesAsSteps(text) {
-  return String(text || '')
-    .split(/\r?\n+/)
-    .map((line) => line.replace(/^\s*\d+[.)-]?\s*/, '').trim())
-    .filter(Boolean)
-}
-
-function renderRichText(text) {
-  const lines = String(text || '')
-    .split(/\r?\n+/)
-    .map((line) => line.trim())
-    .filter(Boolean)
-
-  if (lines.length === 0) {
-    return '<p>No suggestion returned.</p>'
-  }
-
-  return lines
-    .map((line) => `<p>${escapeHtml(line)}</p>`)
-    .join('')
-}
-
-function escapeHtml(value) {
-  return String(value || '')
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;')
 }
 
 export async function semanticReindex(entityId) {
@@ -414,7 +280,7 @@ export async function extractText(file) {
   const formData = new FormData()
   formData.append('file', file)
 
-  const res = await fetch(`${API_BASE}/extract-text`, {
+  const res = await fetch(`${API_BASE}/api/extract-text`, {
     method: 'POST',
     body: formData,
   })

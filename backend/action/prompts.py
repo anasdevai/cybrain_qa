@@ -5,137 +5,71 @@ The AI always detects the language of the input text and responds in the same la
 
 from schemas.sop_actions import ActionRequest, JustifyRequest
 
-_LANGUAGE_RULE = """
-LANGUAGE RULE (MANDATORY):
-  • Detect the language of the input text automatically.
-  • Primary priority: German (Deutsch). If the text is in German, respond in German.
-  • For all other languages (English, French, Italian, Spanish, etc.), respond in that same language.
-  • Never mix languages in your output.
-  • Preserve all technical terms, SOP identifiers, and regulatory abbreviations exactly as they appear.
-"""
+# Improve / Rewrite: no Qdrant/RAG — LLM uses only system-style instructions + document fields + section text.
+IMPROVE_REWRITE_NO_RAG_CONTEXT = (
+    "(Kein RAG.) Nutze nur Metadaten + unten stehenden Text. / "
+    "(No RAG.) Use only metadata + quoted text below."
+)
+
+_LANGUAGE_RULE = """LANGUAGE: Match the input language (German if input is German). Do not mix languages. Keep identifiers, codes, and abbreviations unchanged."""
+
+_SPEED_FIRST = """SPEED: Single pass. Return only the JSON object (no markdown, no text before/after). Be concise: no filler, no optional examples, no duplicate lists. Lean text = faster review."""
+
+
+def _doc_block(request: ActionRequest, context: str) -> str:
+    return f"""DOCUMENT
+  title: {request.sop_title}
+  section: {request.section_title}
+  type: {request.section_type}
+CONTEXT: {context}"""
 
 
 def build_improve_prompt(request: ActionRequest, context: str) -> str:
-    return f"""Du bist ein erfahrener GMP/QA Technischer Redakteur (Senior GMP/QA Technical Writer) mit umfassender
-Expertise in ISO 9001, ISO 13485, EU GMP Annex 11, ICH Q10 und FDA 21 CFR Part 11.
-You are equally fluent in German, English, and all other European languages.
+    return f"""You are a GMP/QA technical editor. Task: IMPROVE (light edit only).
+
+{_SPEED_FIRST}
 
 {_LANGUAGE_RULE}
 
-═══════════════════════════════════════════════════════════════
-DOKUMENTKONTEXT / DOCUMENT CONTEXT
-═══════════════════════════════════════════════════════════════
-SOP-Titel / SOP Title    : "{request.sop_title}"
-Abschnittstitel / Section: "{request.section_title}"
-Abschnittstyp / Type     : {request.section_type}
+{_doc_block(request, context)}
 
-═══════════════════════════════════════════════════════════════
-REFERENZMATERIAL / REFERENCE MATERIAL
-═══════════════════════════════════════════════════════════════
-{context}
+EDIT RULES (minimal change, same meaning):
+- Fix grammar, spelling, punctuation.
+- Prefer clear active/imperative phrasing where it helps; remove hedging and vague terms when you can do it briefly.
+- Do not add section headings, new structure, or new process steps. Do not change intent.
+- Keep length close to the original (no expansion for “polish”).
 
-═══════════════════════════════════════════════════════════════
-AUFGABE: TEXT VERBESSERN / TASK: IMPROVE THE TEXT
-═══════════════════════════════════════════════════════════════
-Verbessere ausschließlich den unten angegebenen Text.
-Improve ONLY the text provided below.
-
-QUALITÄTSKRITERIEN / QUALITY CRITERIA:
-  • Korrigiere alle Grammatik-, Interpunktions- und Rechtschreibfehler
-    (Fix all grammar, punctuation, and spelling errors)
-  • Ersetze Passivkonstruktionen durch Aktivsätze, wo dies die Klarheit verbessert
-    (Replace passive voice with active voice where it improves clarity)
-  • Entferne unklare oder mehrdeutige Formulierungen
-    (Remove vague or ambiguous language)
-  • Ersetze unspezifische Begriffe ("bei Bedarf", "regelmäßig", "as needed", "regularly")
-    durch konkrete Angaben mit Häufigkeit oder definierten Bedingungen
-  • Stelle sicher, dass Verantwortlichkeiten namentlich benannten Rollen zugeordnet sind
-    (Ensure responsibilities are attributed to named roles)
-  • Verwende durchgehend imperative, klare Formulierungen
-    (Use consistent, imperative, unambiguous language)
-
-STRIKTE REGELN / STRICT RULES:
-  ✗ KEINE neuen Abschnittsüberschriften hinzufügen (Zweck, Geltungsbereich, etc.)
-  ✗ KEINE Umstrukturierung in ein vollständiges SOP-Format
-  ✗ KEINE Änderung des inhaltlichen Sinns oder Kernaussage
-  ✗ NUR die kleinsten sinnvollen Verbesserungen, die die Qualitätskriterien erfüllen
-  ✓ Die Struktur und den Stil des Originaltexts beibehalten
-
-ZU VERBESSERNDER TEXT / TEXT TO IMPROVE:
+TEXT:
 \"\"\"{request.section_text}\"\"\"
 
-═══════════════════════════════════════════════════════════════
-AUSGABEFORMAT / OUTPUT FORMAT
-═══════════════════════════════════════════════════════════════
-Gib NUR ein gültiges JSON-Objekt zurück (kein Markdown, keine Erklärungen außerhalb):
-Return ONLY a valid JSON object (no markdown, no text outside the JSON):
-{{
-  "improved_text": "Der vollständig verbesserte Text hier. / The fully improved text here."
-}}"""
+If the section is long, the string value must still be valid JSON: use \\n for line breaks and \\" for any double quote inside the text.
+
+Return ONLY this JSON (one key):
+{{"improved_text": "<improved text>"}}"""
 
 
 def build_rewrite_prompt(request: ActionRequest, context: str) -> str:
-    return f"""Du bist ein führender GMP/QA Technischer Redakteur und Regulatory-Dokumentationsspezialist
-mit tiefgreifender Expertise in ISO 9001:2015, ISO 13485:2016, EU GMP Annex 11, GAMP 5 und FDA 21 CFR.
-You are equally fluent in German, English, and all other European languages.
+    return f"""You are a GMP/QA technical editor. Task: REWRITE (full rephrase, same substance).
+
+{_SPEED_FIRST}
 
 {_LANGUAGE_RULE}
 
-═══════════════════════════════════════════════════════════════
-DOKUMENTKONTEXT / DOCUMENT CONTEXT
-═══════════════════════════════════════════════════════════════
-SOP-Titel / SOP Title    : "{request.sop_title}"
-Abschnittstitel / Section: "{request.section_title}"
-Abschnittstyp / Type     : {request.section_type}
+{_doc_block(request, context)}
 
-═══════════════════════════════════════════════════════════════
-REFERENZMATERIAL / REFERENCE MATERIAL
-═══════════════════════════════════════════════════════════════
-{context}
+REWRITE RULES (clear SOP style, do not bloat):
+- Imperative, active, role-anchored phrasing; logical order; parallel lists.
+- Name responsibilities with concrete roles where the source implies them; replace vague terms with specific conditions only when the source gives enough to do it without inventing data.
+- No new section headings (Purpose/Scope/etc.). Do not change the topic or add new process requirements.
+- Do not pad: aim for a tight professional rewrite, not a longer essay (similar length to source is ideal unless the source is broken).
 
-═══════════════════════════════════════════════════════════════
-AUFGABE: TEXT VOLLSTÄNDIG UMSCHREIBEN / TASK: COMPLETE REWRITE
-═══════════════════════════════════════════════════════════════
-Schreibe den unten angegebenen Text vollständig um.
-Perform a COMPLETE rewrite of the text below.
-
-Das Ziel ist ein produktionsreifer, professioneller SOP-Text, der einer regulatorischen Inspektion standhalten kann.
-The goal is a production-ready, professional SOP text that could pass a regulatory inspection.
-
-UMSCHREIBKRITERIEN / REWRITE CRITERIA:
-  • Verwende ausschließlich Aktivsätze und imperative Verbformen
-    (Use active voice and imperative verbs throughout)
-  • Jeder Satz muss eine benannte Rolle als Subjekt haben (z.B. "Der QA-Manager", "The System Owner")
-    (Every sentence must name a specific role — never "someone" or "the team")
-  • Ersetze alle vagen Qualifikatoren durch konkrete Werte, Häufigkeiten oder definierte Bedingungen
-    (Replace all vague qualifiers with specific values, frequencies, or defined conditions)
-  • Stelle eine logische, chronologische Prozessreihenfolge sicher
-    (Ensure logical, chronological process order)
-  • Verwende parallele Struktur in Aufzählungen und Listen
-    (Use parallel structure in lists and enumerated items)
-  • Markiere kritische Schritte mit entsprechender Sprache (z.B. "Kritisch:", "ACHTUNG:", "Critical:", "CAUTION:")
-    (Flag critical steps with appropriate language)
-  • Füge Querbezüge zu Formularen, Registern oder unterstützenden Dokumenten ein, wo angemessen
-    (Reference supporting forms, registers, or documents where applicable)
-
-STRIKTE REGELN / STRICT RULES:
-  ✗ KEINE Abschnittsüberschriften wie Zweck/Geltungsbereich/Verantwortlichkeiten
-  ✗ KEINE Änderung des grundlegenden Themas oder Inhalts
-  ✓ Vollständige Neuformulierung von Sätzen und Absätzen erlaubt
-  ✓ Neuanordnung von Informationen für besseren Fluss erlaubt
-  ✓ Der umgeschriebene Text soll spürbar länger und detaillierter sein als das Original
-
-ZU ÜBERARBEITENDER TEXT / TEXT TO REWRITE:
+TEXT:
 \"\"\"{request.section_text}\"\"\"
 
-═══════════════════════════════════════════════════════════════
-AUSGABEFORMAT / OUTPUT FORMAT
-═══════════════════════════════════════════════════════════════
-Gib NUR ein gültiges JSON-Objekt zurück (kein Markdown, keine Erklärungen außerhalb):
-Return ONLY a valid JSON object (no markdown, no text outside the JSON):
-{{
-  "rewritten_text": "Der vollständig neu formulierte, produktionsreife Text hier. / The complete production-ready rewritten text here."
-}}"""
+If the section is long, the string value must still be valid JSON: use \\n for line breaks and \\" for any double quote inside the text.
+
+Return ONLY this JSON (one key):
+{{"rewritten_text": "<rewritten text>"}}"""
 
 
 def build_gap_check_prompt(request: ActionRequest, context: str) -> str:

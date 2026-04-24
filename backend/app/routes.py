@@ -1,12 +1,14 @@
-from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Query
+import io
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Query, UploadFile, File
 from typing import List
 from sqlalchemy.orm import Session
-from sqlalchemy import func, or_
-from .database import get_db
+from sqlalchemy import func, or_, asc
+from .database import get_db, SessionLocal
 from .models import (
     SOP, SOPVersion, Deviation, Capa, AuditFinding, Decision,
     SopDeviationLink, DeviationCapaLink, CapaAuditLink, AuditDecisionLink, DecisionSopLink,
-    AILinkSuggestion
+    AILinkSuggestion,
+    EmbeddingJob,
 )
 from .schemas import (
     # Editor compat request bodies
@@ -180,12 +182,20 @@ def _resolve_current_version(db: Session, sop: SOP) -> SOPVersion | None:
 def _schedule_semantic_job(background_tasks: BackgroundTasks, entity_type: str, entity_id: uuid.UUID, version_id: uuid.UUID | None = None, job_type: str = "entity_reindex"):
     if entity_type not in ENTITY_TYPES:
         return
-    SemanticPipelineService.enqueue_reindex(
+    job_id = SemanticPipelineService.enqueue_reindex(
         entity_type=entity_type,
         entity_id=entity_id,
         version_id=version_id,
         job_type=job_type,
     )
+    if background_tasks is not None and job_id:
+        def _run_one() -> None:
+            try:
+                SemanticPipelineService.process_job(job_id)
+            except Exception as exc:
+                print(f"[semantic-job] {job_id} failed: {exc}", flush=True)
+
+        background_tasks.add_task(_run_one)
 
 
 def _normalize_sop_metadata(sop_number: str, title: str, department: str = None, raw_meta: dict = None) -> dict:
@@ -338,6 +348,44 @@ router = APIRouter()
 @router.get("/api/health")
 def health():
     return {"status": "ok"}
+
+
+@router.post("/api/extract-text")
+async def extract_text_from_upload(file: UploadFile = File(...)):
+    """
+    Extract plain text from a small text file or PDF (editor import / OCR path).
+    """
+    raw = await file.read()
+    if not raw:
+        raise HTTPException(status_code=400, detail="Empty file")
+    name = (file.filename or "").lower()
+    try:
+        if name.endswith(".pdf"):
+            from pypdf import PdfReader
+
+            reader = PdfReader(io.BytesIO(raw))
+            parts: list[str] = []
+            for page in reader.pages:
+                t = page.extract_text()
+                if t:
+                    parts.append(t)
+            text = "\n".join(parts)
+        elif name.endswith((".txt", ".md", ".csv", ".json")):
+            text = raw.decode("utf-8", errors="replace")
+        else:
+            # Best-effort UTF-8 for unknown extensions
+            try:
+                text = raw.decode("utf-8")
+            except Exception:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Unsupported or binary file; use .pdf or .txt",
+                ) from None
+        return {"text": (text or "").strip()}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Extraction failed: {e!s}") from e
 
 
 # ==========================================
@@ -1577,20 +1625,43 @@ def semantic_reindex(
     queued = []
     if payload.full_reindex:
         for sop in _tenant_scoped_query(db, SOP).all():
-            _schedule_semantic_job(background_tasks, "sop", sop.id, sop.current_version_id, "full_reindex")
+            SemanticPipelineService.enqueue_reindex("sop", sop.id, sop.current_version_id, "full_reindex")
             queued.append({"entity_type": "sop", "entity_id": str(sop.id)})
         for dev in _tenant_scoped_query(db, Deviation).all():
-            _schedule_semantic_job(background_tasks, "deviation", dev.id, None, "full_reindex")
+            SemanticPipelineService.enqueue_reindex("deviation", dev.id, None, "full_reindex")
             queued.append({"entity_type": "deviation", "entity_id": str(dev.id)})
         for capa in _tenant_scoped_query(db, Capa).all():
-            _schedule_semantic_job(background_tasks, "capa", capa.id, None, "full_reindex")
+            SemanticPipelineService.enqueue_reindex("capa", capa.id, None, "full_reindex")
             queued.append({"entity_type": "capa", "entity_id": str(capa.id)})
         for audit in _tenant_scoped_query(db, AuditFinding).all():
-            _schedule_semantic_job(background_tasks, "audit_finding", audit.id, None, "full_reindex")
+            SemanticPipelineService.enqueue_reindex("audit_finding", audit.id, None, "full_reindex")
             queued.append({"entity_type": "audit_finding", "entity_id": str(audit.id)})
         for decision in _tenant_scoped_query(db, Decision).all():
-            _schedule_semantic_job(background_tasks, "decision", decision.id, None, "full_reindex")
+            SemanticPipelineService.enqueue_reindex("decision", decision.id, None, "full_reindex")
             queued.append({"entity_type": "decision", "entity_id": str(decision.id)})
+
+        def _drain_embedding_queue() -> None:
+            while True:
+                s = SessionLocal()
+                try:
+                    nxt = (
+                        s.query(EmbeddingJob)
+                        .filter(EmbeddingJob.status == "pending")
+                        .order_by(asc(EmbeddingJob.created_at))
+                        .first()
+                    )
+                    if not nxt:
+                        return
+                    jid = nxt.id
+                finally:
+                    s.close()
+                try:
+                    SemanticPipelineService.process_job(jid)
+                except Exception as exc:
+                    print(f"[semantic reindex] job {jid} failed: {exc}", flush=True)
+
+        if queued:
+            background_tasks.add_task(_drain_embedding_queue)
     else:
         if not payload.entity_type or not payload.entity_id:
             raise HTTPException(status_code=422, detail="entity_type and entity_id are required unless full_reindex=true.")

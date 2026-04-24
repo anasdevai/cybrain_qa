@@ -235,7 +235,7 @@ async def fetch_all_entities() -> dict[str, List[Document]]:
     Returns a dict:  { "sops": [...], "deviations": [...], ... }
     Each value is a list of LangChain Documents ready for chunking.
     """
-    async with httpx.AsyncClient(timeout=30) as client:
+    async with httpx.AsyncClient(timeout=120.0) as client:
         sops_raw, devs_raw, capas_raw, decisions_raw, audits_raw = await asyncio.gather(
             _fetch_json(client, ENDPOINT_SOPS),
             _fetch_json(client, ENDPOINT_DEVIATIONS),

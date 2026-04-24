@@ -1,29 +1,37 @@
 import React, { useState, useRef, useEffect } from 'react'
 import { Plus, ArrowUp, Search, MessageCircle } from 'lucide-react'
 import ChatMessage from './ChatMessage'
+import ChatTypingIndicator from './ChatTypingIndicator'
 import SourceTag from './SourceTag'
 import './ChatPanel.css'
 
 /**
  * ChatPanel — Main chat detail view with header, messages & input.
  */
-export default function ChatPanel({ conversation, onSendMessage }) {
+export default function ChatPanel({ conversation, onSendMessage, isAwaitingResponse = false }) {
   const [inputValue, setInputValue] = useState('')
   const messagesEndRef = useRef(null)
   const prevMsgCount = useRef(conversation?.messages?.length || 0)
 
-  // Auto-scroll only when NEW messages arrive, not on initial render
+  useEffect(() => {
+    prevMsgCount.current = conversation?.messages?.length || 0
+  }, [conversation?.id])
+
+  // Scroll when new messages arrive or when loading state appears (typing indicator)
   useEffect(() => {
     const count = conversation?.messages?.length || 0
-    if (prevMsgCount.current > 0 && count > prevMsgCount.current) {
-      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-    }
+    const newMessage = prevMsgCount.current > 0 && count > prevMsgCount.current
     prevMsgCount.current = count
-  }, [conversation?.messages?.length])
+    if (newMessage || isAwaitingResponse) {
+      requestAnimationFrame(() => {
+        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+      })
+    }
+  }, [conversation?.messages?.length, isAwaitingResponse])
 
   const handleSend = () => {
     const text = inputValue.trim()
-    if (!text) return
+    if (!text || isAwaitingResponse) return
     onSendMessage?.(text)
     setInputValue('')
   }
@@ -31,7 +39,7 @@ export default function ChatPanel({ conversation, onSendMessage }) {
   const handleKeyDown = (e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()
-      handleSend()
+      if (!isAwaitingResponse) handleSend()
     }
   }
 
@@ -98,6 +106,7 @@ export default function ChatPanel({ conversation, onSendMessage }) {
         {conversation.messages.map(msg => (
           <ChatMessage key={msg.id} message={msg} />
         ))}
+        {isAwaitingResponse ? <ChatTypingIndicator /> : null}
         <div ref={messagesEndRef} />
       </div>
 
@@ -129,13 +138,15 @@ export default function ChatPanel({ conversation, onSendMessage }) {
             value={inputValue}
             onChange={e => setInputValue(e.target.value)}
             onKeyDown={handleKeyDown}
+            disabled={isAwaitingResponse}
+            aria-busy={isAwaitingResponse}
             aria-label="Nachricht eingeben"
           />
         </div>
         <button
           className="chat-panel__send-btn"
           onClick={handleSend}
-          disabled={!inputValue.trim()}
+          disabled={!inputValue.trim() || isAwaitingResponse}
           title="Senden"
           aria-label="Nachricht senden"
         >
